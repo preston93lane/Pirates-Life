@@ -423,3 +423,13 @@ code (sailing, town, night and battle tunes) with creaks and gulls, and has its 
 To pay for the richer look: far islands are hidden, mid-distance islands drop trees and
 buildings, the draw distance is cut to match the fog, and the Low graphics setting halves
 particles and sharpness.
+
+## 13. Crew, command and single guns (build 0.5)
+
+- **Hired hands.** Taverns have a Hands tab. Nine trades: Deckhand, Gunner, Rigger, Carpenter, Surgeon, Quartermaster, Swordmaster, Musketeer, Bruiser. Three grades (Green, Able, Veteran) scale both cost and effect. Berths = ship class + 2 + berth upgrades + Crew Quarters.
+- **Ship bonuses** come from the crew list (cannon damage, reload, speed, hull mending, plunder), capped so no build is runaway.
+- **Fighting hands.** Up to six board beside the captain. Up to three chosen hands go ashore on raids and into caves. A hand who falls is gone for good unless a surgeon saves them; morale drops.
+- **Morale** (0 to 100) nudges speed and reload. Wins raise it; deaths, defeat and sinking lower it. Rum rations and sharing plunder restore it. Below 20, hands desert in port.
+- **Command** (Menu, or the CREW button at sea): stations (even, sails, guns, damage parties) and orders (fire at will, double-shot, brace, lighten ship, rum ration, share plunder).
+- **Single guns.** While walking the deck, stand at any cannon and man it: aim, set range, fire. Each gun has its own reload keyed by side and index, which is the hook for one player per gun in multiplayer.
+- **Light.** Nights are brighter. The captain carries a torch in caves and after dark. Caves are lit warm.

@@ -242,3 +242,8 @@ textarea.code { display: block; width: 100%; box-sizing: border-box; margin: 6px
 #btnMenu.hot::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
 
 #bSkill { right: 116px; bottom: 144px; } #bBomb { right: 58px; bottom: 172px; }
+
+#bCmd { right: 176px; bottom: 6px; } #bCmd em { font-size: 8.5px; color: var(--brass); }
+.pick { border-color: var(--gold) !important; }
+.bar2 { height: 8px; border-radius: 4px; background: rgba(0,0,0,.35); overflow: hidden; margin: 6px 0 10px; } .bar2 i { display: block; height: 100%; background: var(--gold); }
+.btns.gun .act:not(.big) { display: none; }

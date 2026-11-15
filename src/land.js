@@ -1,8 +1,8 @@
 // Everything on foot: walking islands, sword and gun combat, boarding fights, chests, digging, talking.
 import * as THREE from 'three';
 import { buildCharacter, buildPet, staticFigure } from './character.js';
-import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES } from './data.js';
-import { playerStats, shipStats, collect, deathTax, grant, isWanted } from './state.js';
+import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES, HANDS, GRADES } from './data.js';
+import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus } from './state.js';
 import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './util.js';
 import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE } from './world.js';
 import { input } from './input.js';
@@ -37,6 +37,36 @@ export function createLand(game) {
   }
   const place = (a) => { a.ch.root.position.set(a.x, a.y, a.z); a.ch.root.rotation.y = a.face; };
   function removeActor(a) { scene.remove(a.ch.root); if (a.line) scene.remove(a.line); }
+
+  // ----- the captain's torch: lit in caves and after dark -----
+  const torch = new THREE.Group(), torchLight = new THREE.PointLight(0xffb469, 0, 46, 1.25);
+  { const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.75, 5), new THREE.MeshLambertMaterial({ color: 0x4a3420, flatShading: true })), flame = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 6), new THREE.MeshBasicMaterial({ color: 0xffb040, fog: false }));
+    stick.position.y = 0.3; flame.position.y = 0.82; torch.add(stick, flame); torch.userData.flame = flame; torch.visible = false; scene.add(torch, torchLight); }
+  function updateTorch(dt) {
+    const p = land.player, lit = !!land.kind && p && (land.cave || game.world.night > 0.3), want = !lit ? 0 : land.cave ? 60 : 34 * Math.min(1, game.world.night * 1.6);
+    torchLight.intensity = damp(torchLight.intensity, want, 6, dt); torch.visible = lit && land.gun == null;
+    if (!p) return;
+    const s = Math.sin(p.face), c = Math.cos(p.face);
+    torch.position.set(p.x - c * 0.42 + s * 0.28, p.y + 1.15, p.z + s * 0.42 + c * 0.28); torch.rotation.set(0.25, p.face, 0.2);
+    torchLight.position.set(p.x + s * 0.4, p.y + 2.6, p.z + c * 0.4);
+    const fl = torch.userData.flame; fl.scale.setScalar(0.85 + Math.random() * 0.35);
+    if (torch.visible && Math.random() < dt * 9) fx.emit(torch.position.x, torch.position.y + 0.95, torch.position.z, { n: 1, color: 0xffa040, lit: true, speed: 0.3, up: 1.4, life: 0.45, size: 0.4, grow: -0.5, spread: 0.08 });
+  }
+  land.torchOff = () => { torchLight.intensity = 0; torch.visible = false; };
+  // ----- hired hands who fight beside you -----
+  function spawnHands(list, at) {
+    const s = game.save, lvl = 1 + 0.07 * (s.level - 1);
+    list.forEach((h, i) => { const d = HANDS[h.role], [x, z] = at(i, list.length), a = makeActor(d.foe, x, z, 0, lvl * GRADES[h.g].fight * d.fight); a.hand = h; a.state = 'chase'; a.face = land.player.face; a.bar.visible = a.bg.visible = true; });
+  }
+  const worth = (h) => GRADES[h.g].fight * HANDS[h.role].fight * (HANDS[h.role].land ? 1.6 : 1);
+  function landingParty() { const p = land.player, list = game.save.crew.filter((h) => h.ashore).slice(0, 3); spawnHands(list, (i) => [p.x + Math.sin(p.face + 2 + i * 1.1) * 2, p.z + Math.cos(p.face + 2 + i * 1.1) * 2]); }
+  function handFell(a) {
+    const s = game.save, h = a.hand, heal = crewBonus(s).heal;
+    if (!s.crew.includes(h)) return;
+    if (heal > 0 && Math.random() < Math.min(0.85, 0.3 + heal)) { game.toast(`${h.name} is down, but your surgeon says they will pull through.`, 'dim'); return; }
+    s.crew.splice(s.crew.indexOf(h), 1); addMorale(s, -10); game.sea.refreshStats(); audio.bad();
+    game.toast(`${h.name} the ${HANDS[h.role].name.toLowerCase()} is dead. The crew take it hard.`, 'warn');
+  }
 
   function ensurePlayer() {
     if (land.player) return land.player;
@@ -129,7 +159,7 @@ export function createLand(game) {
     for (const c of isl.chests) addChest(c, !!s.chests[c.id]);
     if (isl.vault) addChest({ x: isl.vault.x, z: isl.vault.z, id: 'vault', tier: 4, vault: true }, !raidReady);
     for (const m of s.maps) if (m.island === isl.id) { const d = isl.digs[m.spot], mesh = new THREE.Mesh(moundGeo, moundMat); mesh.position.set(d.x, heightAt(d.x, d.z) + 0.1, d.z); scene.add(mesh); land.mounds.push(mesh); }
-    petAshore();
+    petAshore(); landingParty();
     if (isl.kind === 'hideout') { const p = collect(s); if (p.gold + p.timber + p.iron > 0) game.toast(`The cove produced: ${[p.gold && `${p.gold} gold`, p.timber && `${p.timber} timber`, p.iron && `${p.iron} iron`].filter(Boolean).join(', ')}`, 'gold'); }
   };
   function addChest(c, open) {
@@ -145,7 +175,7 @@ export function createLand(game) {
     spawnPlayer(c.x, c.z - c.hl + 2.5, 0); game.cam.yaw = 0; game.cam.pitch = 0.5;
     if (fresh) (CAVE_FOES[isl.id] || ['skeleton', 'skeleton']).forEach((k, i, arr) => { const a = makeActor(k, c.x + Math.sin(i * 2.3) * 6, c.z + 2 + (i / arr.length) * 10, 1, lvl); a.face = Math.PI; });
     addChest({ x: c.x, z: c.z + c.hl - 3, id: `cave:${isl.id}`, tier: 3, cave: isl.id }, !fresh);
-    petAshore(); game.toast(fresh ? 'Something moves in the dark.' : 'The cave is quiet. You cleared it not long ago.', fresh ? 'warn' : 'dim');
+    petAshore(); landingParty(); game.toast(fresh ? 'Something moves in the dark.' : 'The cave is quiet. You cleared it not long ago.', fresh ? 'warn' : 'dim');
   });
   land.exitCave = () => game.fade(() => { const isl = land.isl; land.enter(isl, isl.caveAt); game.cam.yaw = 0; });
   // ----- powder flasks -----
@@ -179,8 +209,7 @@ export function createLand(game) {
     land.boarding = { enemy, plats: [plat(ps), plat(enemy)], won: false, t: 0 };
     platforms.push(...land.boarding.plats);
     const [px, pz] = ps.at(-side * 0.8, (ps.model.walk.z0 + ps.model.walk.z1) / 2); spawnPlayer(px, pz, ps.heading + side * Math.PI / 2);
-    const n = shipStats(s).crew;
-    for (let i = 0; i < n; i++) { const [x, z] = ps.at(-side * 0.5, (ps.model.walk.z0 + ps.model.walk.z1) / 2 + (i - (n - 1) / 2) * 2.4); const a = makeActor('crew', x, z, 0, lvl); a.state = 'chase'; a.face = land.player.face; }
+    spawnHands(s.crew.slice().sort((a, b) => worth(b) - worth(a)).slice(0, 6), (i, n) => ps.at(-side * 0.5, (ps.model.walk.z0 + ps.model.walk.z1) / 2 + (i - (n - 1) / 2) * 2.2));
     enemy.crew.forEach((k, i) => { const [x, z] = enemy.at(rand(-1, 1) * enemy.cls.beam * 0.25, enemy.model.walk.z0 + 1 + (i / Math.max(1, enemy.crew.length - 1)) * (enemy.model.walk.z1 - enemy.model.walk.z0 - 2)); const a = makeActor(k, x, z, 1, lvl); a.state = 'chase'; a.face = land.player.face + Math.PI; });
     petAshore();
     game.toast('Board her! Cut them down!', 'warn');
@@ -203,7 +232,7 @@ export function createLand(game) {
     if (land.deck) { const i = platforms.indexOf(land.deck); if (i >= 0) platforms.splice(i, 1); land.deck = null; const sh = game.sea.player; if (sh.group.userData.helm) sh.group.userData.helm.visible = true; sh.fadeSails(false); }
     if (land.player) scene.remove(land.player.ch.root);
     if (land.boarding) { for (const p of land.boarding.plats) { const i = platforms.indexOf(p); if (i >= 0) platforms.splice(i, 1); } game.sea.player.frozen = false; land.boarding.enemy.frozen = false; game.sea.player.fadeSails(false); land.boarding.enemy.fadeSails(false); land.boarding = null; }
-    land.kind = null; land.isl = null; land.dockPet();
+    land.kind = null; land.isl = null; land.gun = null; land.torchOff(); land.dockPet();
   };
 
   // ---------- movement ----------
@@ -239,6 +268,7 @@ export function createLand(game) {
   function kill(a, from) {
     a.alive = false; a.hp = 0; release(a); a.state = 'dead'; a.t = 0; a.ch.anim.state = 'dead'; a.ch.anim.t = 0; a.bar.visible = a.bg.visible = false;
     if (land.focus === a) land.focus = null;
+    if (a.hand) handFell(a);
     if (a.team === 1) {
       const s = game.save, d = a.def; s.stats.kills++;
       if (land.isl && a.spawnI !== undefined) land.isl.cleared[a.spawnI] = Date.now();
@@ -280,6 +310,7 @@ export function createLand(game) {
     const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml;
     p.cdRoll -= dt; p.gunT -= dt; p.combat -= dt; p.t += dt; p.cdWhirl = (p.cdWhirl || 0) - dt;
     if (!p.alive) { settle(p, dt); return; }
+    if (land.gun) { for (const k of ['dodge', 'skill', 'bomb', 'shoot', 'rum']) input.pressed[k] = false; p.state = 'free'; p.face = land.gun.face; an.state = 'idle'; land.focus = null; settle(p, dt); return; }
     const fdx = jm > 0.2 ? mx : Math.sin(p.face), fdz = jm > 0.2 ? mz : Math.cos(p.face);
     land.focus = findFocus(10, fdx, fdz);
     const f = land.focus;
@@ -299,7 +330,7 @@ export function createLand(game) {
         if (p.gunT > 0) game.toast('Still reloading', 'dim');
         else { const t = findFocus(30, Math.sin(p.face), Math.cos(p.face)); p.state = 'shoot'; p.t = 0; p.shotAt = t; p.fired = false; if (t) p.face = Math.atan2(t.x - p.x, t.z - p.z); }
       } else if (input.take('rum')) {
-        if (s.rum > 0 && p.hp < p.maxHp) { s.rum--; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.55); audio.good(); game.toast('You drink the rum. Wounds fade.', 'dim'); fx.sparks(p.x, p.y + 1.6, p.z, 10, 0x9fe0a8); }
+        if (s.rum > 0 && p.hp < p.maxHp) { s.rum--; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (0.55 + Math.min(0.4, crewBonus(s).heal * 0.4))); audio.good(); game.toast('You drink the rum. Wounds fade.', 'dim'); fx.sparks(p.x, p.y + 1.6, p.z, 10, 0x9fe0a8); }
         else game.toast(s.rum > 0 ? 'You are not hurt' : 'No rum left', 'dim');
       } else if (input.down.block) { if (p.state !== 'block') { p.state = 'block'; p.blockT = 0; } }
       else p.state = 'free';
@@ -364,7 +395,7 @@ export function createLand(game) {
   function nearestEnemyOf(a) {
     let best = null, bd = 1e9; const p = land.player;
     if (a.team === 1 && p.alive) { best = p; bd = dist2(a.x, a.z, p.x, p.z) * 0.8; }
-    for (const b of land.actors) if (b.alive && b.team !== a.team && b.state !== 'buried') { const d = dist2(a.x, a.z, b.x, b.z); if (d < bd) { bd = d; best = b; } }
+    for (const b of land.actors) if (b.alive && b.team !== a.team && b.state !== 'buried') { if (a.team === 0 && land.kind === 'land' && (b.state === 'idle' || dist2(b.x, b.z, p.x, p.z) > 16)) continue; const d = dist2(a.x, a.z, b.x, b.z); if (d < bd) { bd = d; best = b; } }
     return best;
   }
   function strike(a, t) {
@@ -394,6 +425,13 @@ export function createLand(game) {
       if (t && dist2(a.x, a.z, t.x, t.z) < (a.def.boss ? 26 : 17)) { a.state = 'chase'; if (a.def.boss) { audio.roar(); game.shake(0.8); } }
       settle(a, dt); return;
     }
+    if (a.team === 0 && land.kind === 'land' && a.state !== 'stagger' && (!t || dist2(a.x, a.z, p.x, p.z) > 24)) { // stay with the captain
+      const d = dist2(a.x, a.z, p.x, p.z), to = Math.atan2(p.x - a.x, p.z - a.z); release(a); a.state = 'chase';
+      if (d > 45) { a.x = p.x - Math.sin(p.face) * 2; a.z = p.z - Math.cos(p.face) * 2; a.y = groundAt(a.x, a.z); }
+      else if (d > 3.4) { const sp = d > 9 ? 7 : 5; a.face = turnToward(a.face, to, 8 * dt); walk(a, Math.sin(to) * sp * dt, Math.cos(to) * sp * dt); an.state = 'run'; an.speed = sp; } else an.state = 'idle';
+      if (a.hp < a.maxHp) { a.hp = Math.min(a.maxHp, a.hp + a.maxHp * 0.03 * dt); a.bar.scale.x = Math.max(0.001, a.hp / a.maxHp) / (a.def.scale || 1); }
+      settle(a, dt); return;
+    }
     if (!t) { an.state = 'idle'; release(a); if (a.state !== 'stagger') a.state = 'chase'; settle(a, dt); return; }
     const d = dist2(a.x, a.z, t.x, t.z), to = Math.atan2(t.x - a.x, t.z - a.z), sc = a.def.scale || 1, reach = 1.5 * sc + a.radius + t.radius;
     if (a.state === 'stagger') { an.state = 'stagger'; if (a.t >= 0) { a.t = -a.t; } if (a.t > -0.02) { a.state = 'chase'; a.parried = false; a.cd = Math.max(a.cd, 0.3); } settle(a, dt); return; }
@@ -405,15 +443,15 @@ export function createLand(game) {
         an.state = mv ? 'run' : 'idle'; an.speed = a.def.speed;
         if (a.cd <= 0 && d < 24) { a.state = 'wind'; a.t = 0; a.aim = { x: t.x, z: t.z }; }
       } else if (a.state === 'wind') {
-        an.state = 'aim'; a.mark.visible = true;
+        an.state = 'aim'; a.mark.visible = a.team === 1;
         if (a.t < a.def.tele - 0.28) { a.face = turnToward(a.face, to, 8 * dt); a.aim = { x: t.x, z: t.z }; }
         const from = { x: a.x + Math.sin(a.face) * 0.6, y: a.y + 1.42, z: a.z + Math.cos(a.face) * 0.6 }, L = 26;
-        a.line.visible = true; a.line.position.set(from.x + Math.sin(a.face) * L / 2, from.y, from.z + Math.cos(a.face) * L / 2); a.line.rotation.y = a.face; a.line.scale.z = L; a.line.material.opacity = 0.35 + 0.5 * (a.t / a.def.tele);
+        a.line.visible = a.team === 1; a.line.position.set(from.x + Math.sin(a.face) * L / 2, from.y, from.z + Math.cos(a.face) * L / 2); a.line.rotation.y = a.face; a.line.scale.z = L; a.line.material.opacity = 0.35 + 0.5 * (a.t / a.def.tele);
         if (a.t >= a.def.tele) {
           release(a); a.state = 'chase'; a.cd = rand(2.4, 3.6); audio.shot(0.7); fx.smoke(from.x, from.y, from.z, [Math.sin(a.face) * 0.4, 0, Math.cos(a.face) * 0.4], 5);
           const hit = dist2(t.x, t.z, a.aim.x, a.aim.z) < 1.5 && !(t.isPlayer && iframes(t));
           const end = hit ? chest(t) : { x: from.x + Math.sin(a.face) * L, y: from.y, z: from.z + Math.cos(a.face) * L }; fx.tracer(from, end);
-          if (hit) { if (t.isPlayer) hurtPlayer(a.dmg * (t.state === 'block' ? 0.5 : 1), a, false); else { t.hp -= a.dmg; if (t.hp <= 0) kill(t, a); } }
+          if (hit) { if (t.isPlayer) hurtPlayer(a.dmg * (t.state === 'block' ? 0.5 : 1), a, false); else if (t.team === 1) hurtFoe(t, a.dmg * rand(0.9, 1.1), a, false); else { t.hp -= a.dmg; t.bar.visible = t.bg.visible = true; t.bar.scale.x = Math.max(0.001, t.hp / t.maxHp); if (t.hp <= 0) kill(t, a); } }
           else if (t.isPlayer) game.ui.floatText(t.x, t.y + 2.2, t.z, 'Missed', '#cfe8d8');
         }
       }
@@ -427,7 +465,7 @@ export function createLand(game) {
       else { an.state = 'idle'; if (t.isPlayer && !a.token && land.tokens >= 2) walk(a, Math.cos(to) * a.strafe * 1.4 * dt, -Math.sin(to) * a.strafe * 1.4 * dt); }
       if (d <= reach + 0.2 && a.cd <= 0 && (!t.isPlayer || a.token || land.tokens < 2)) { if (t.isPlayer && !a.token) { a.token = true; land.tokens++; } a.state = 'wind'; a.t = 0; a.atkI = (a.atkI || 0) + 1; }
     } else if (a.state === 'wind') {
-      an.state = 'attack'; an.i = a.def.heavy ? 2 : a.atkI; an.u = 0.3 * Math.min(1, a.t / a.def.tele); a.mark.visible = true; a.mark.rotation.y += dt * 6;
+      an.state = 'attack'; an.i = a.def.heavy ? 2 : a.atkI; an.u = 0.3 * Math.min(1, a.t / a.def.tele); a.mark.visible = a.team === 1; a.mark.rotation.y += dt * 6;
       if (a.t < a.def.tele - 0.16) a.face = turnToward(a.face, to, 5 * dt);
       if (a.def.boss && a.t > a.def.tele * 0.5 && d > reach) walk(a, Math.sin(a.face) * 7 * dt, Math.cos(a.face) * 7 * dt);
       if (a.t >= a.def.tele) { a.state = 'strike'; a.t = 0; a.mark.visible = false; audio.swish(); strike(a, t); if (a.def.heavy) { fx.dust(a.x + Math.sin(a.face) * 1.5 * sc, a.y + 0.2, a.z + Math.cos(a.face) * 1.5 * sc, 10); game.shake(0.25); } }
@@ -455,6 +493,8 @@ export function createLand(game) {
     if (land.kind === 'board') return null;
     if (land.kind === 'deck') {
       const sh = game.sea.player, need = sh.maxHp - sh.hp;
+      if (land.gun) return { label: 'Leave the gun', icon: 'person', run: () => { land.gun = null; game.cam.yaw = sh.heading; game.cam.pitch = 0.45; } };
+      for (let i = 0; i < sh.model.gunZ.length; i++) { const g = sh.model.gunZ[i]; if (Math.abs(land.lz - g.z) < 1.3 && Math.abs(land.lx) > g.x - 2.4) { const side = land.lx > 0 ? 1 : -1; return { label: 'Man this gun', sub: `${side > 0 ? 'Port' : 'Starboard'} gun ${i + 1}: aim and fire it yourself`, icon: 'fire', run: () => { land.gun = { side, i, aim: 0, range: 90, face: 0 }; land.lx = side * Math.max(0.6, g.x - 1.1); land.lz = g.z; game.tip2('gun', 'You are on the gun. Drag or use the stick to swing it left and right and to set the range. The ring shows where the ball lands. Tap FIRE.'); } }; } }
       if (Math.abs(land.lz - (0.47 - 0.5) * sh.cls.len) < 2.2 && Math.abs(land.lx) < 2.2 && need > 4 && s.timber > 0) return { label: 'Repair hull', sub: `${s.timber} timber aboard`, icon: 'build', run: () => { const n = Math.min(5, s.timber, Math.ceil(need / 5)); s.timber -= n; sh.hp = Math.min(sh.maxHp, sh.hp + n * 5); audio.dig(); game.toast(`Patched the hull with ${n} timber.`, 'gold'); } };
       return { label: 'Take the helm', icon: 'anchor', run: () => game.takeHelm() };
     }
@@ -491,7 +531,7 @@ export function createLand(game) {
     updatePlayer(dt);
     if (land.kind === 'deck') rideDeck(false);
     for (const a of land.actors) updateFoe(a, dt);
-    updatePet(dt); updateBombs(dt);
+    updatePet(dt); updateBombs(dt); updateTorch(dt);
     // chance encounters reveal themselves only when you are close; ambushers spring out
     for (const q of land.pois) {
       if (q.done) continue; const d = dist2(p.x, p.z, q.x, q.z);

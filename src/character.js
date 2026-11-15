@@ -9,6 +9,9 @@ export function setPlayerLook(l) { playerLook = l; }
 const LOOKS = {
   player: { coat: 0x2a3f55, shirt: 0xc4b99d, pants: 0x2a2622, boots: 0x16120f, hat: 'tricorn', hatC: 0x14161a, tails: true, sash: 0x7d1f1a, weapon: 'cutlass', gun: true },
   crew: { coat: 0x4a3b2c, shirt: 0xa89f88, pants: 0x3b3a36, boots: 0x1c1713, hat: 'bandana', hatC: 0x2f5d63, weapon: 'cutlass' },
+  bravo: { coat: 0x24474d, shirt: 0xc4b99d, pants: 0x2a2622, boots: 0x16120f, hat: 'tricorn', hatC: 0x1c2a2c, sash: 0xc9a94a, weapon: 'cutlass', blade: 0xd8dcdf },
+  musketeer: { coat: 0x3b4a3a, shirt: 0xa89f88, pants: 0x3b3a36, boots: 0x1c1713, hat: 'wide', hatC: 0x2f5d63, tails: true, weapon: 'musket' },
+  bruiser: { coat: null, shirt: null, pants: 0x3b3a36, boots: 0x1c1713, hat: 'bandana', hatC: 0x2f5d63, bulk: 1.3, sash: 0x2f5d63, weapon: 'axe' },
   brigand: { coat: 0x4d3c2d, shirt: 0x8a7a62, pants: 0x3d3832, boots: 0x16120f, hat: 'bandana', hatC: 0x6b1c18, weapon: 'cutlass', blade: 0x8c8a84 },
   marksman: { coat: 0x4c4636, shirt: 0x4c4636, pants: 0x2f2a26, boots: 0x16120f, hat: 'wide', hatC: 0x2b2520, tails: true, weapon: 'musket' },
   brute: { coat: null, shirt: null, pants: 0x33302b, boots: 0x16120f, hat: 'none', bulk: 1.3, sash: 0x6b1c18, weapon: 'axe' },

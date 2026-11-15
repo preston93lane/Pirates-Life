@@ -1,9 +1,9 @@
 // HUD and menus. Plain DOM over the canvas.
 import * as THREE from 'three';
-import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB } from './data.js';
+import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, HANDS, GRADES, STATIONS } from './data.js';
 import { createMap } from './map.js';
 import { flagTexture } from './ship.js';
-import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave } from './state.js';
+import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave, makeHand, hireCost, addMorale, moraleWord, crewBonus } from './state.js';
 import { heightAt, nearestIsland, refreshBase } from './world.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
@@ -33,7 +33,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export function createUI(game) {
   const ui = { dirty: true, panel: null, floats: [], miniT: 0, hintT: 0 };
-  const el = {}; ['hud', 'hpFill', 'hpText', 'pGold', 'pTimber', 'pIron', 'pHold', 'wanted', 'qTitle', 'qText', 'target', 'tName', 'tFill', 'toasts', 'mini', 'place', 'btnMenu', 'btnMute', 'seaBtns', 'landBtns', 'bFire', 'bShoot', 'bDodge', 'rumN', 'sailPips', 'speed', 'rlP', 'rlS', 'ctx', 'hint', 'floats', 'flash', 'banner', 'panel', 'title', 'fade', 'btnContinue', 'btnNew', 'bAmmo', 'ammoN', 'bSwivel', 'quest', 'bSkill', 'bombN'].forEach((k) => { el[k] = $(k); });
+  const el = {}; ['hud', 'hpFill', 'hpText', 'pGold', 'pTimber', 'pIron', 'pHold', 'wanted', 'qTitle', 'qText', 'target', 'tName', 'tFill', 'toasts', 'mini', 'place', 'btnMenu', 'btnMute', 'seaBtns', 'landBtns', 'bAtk', 'bFire', 'bShoot', 'bDodge', 'rumN', 'sailPips', 'speed', 'rlP', 'rlS', 'ctx', 'hint', 'floats', 'flash', 'banner', 'panel', 'title', 'fade', 'btnContinue', 'btnNew', 'bAmmo', 'ammoN', 'bSwivel', 'quest', 'bSkill', 'bombN'].forEach((k) => { el[k] = $(k); });
   for (const s of document.querySelectorAll('[data-icon]')) s.innerHTML = svg(s.dataset.icon);
   el.pGold.dataset.l = 'Gold'; el.pTimber.dataset.l = 'Timber'; el.pIron.dataset.l = 'Iron'; el.pHold.dataset.l = 'Hold';
   const S = () => game.save, mctx = el.mini.getContext('2d'), v3 = new THREE.Vector3();
@@ -84,7 +84,9 @@ export function createUI(game) {
       el.speed.textContent = `${Math.max(0, p.speed * 1.2).toFixed(0)} kn`;
       el.ammoN.textContent = AMMO[s.shot].short; el.bSwivel.hidden = !s.swivel; el.bSwivel.classList.toggle('cool', sea.swivelCd > 0); el.bSwivel.style.setProperty('--cd', clamp((sea.swivelCd || 0) / 2.8, 0, 1));
     } else {
-      const p = land.player, st = playerStats(s);
+      const p = land.player, st = playerStats(s), g = land.gun;
+      el.landBtns.classList.toggle('gun', !!g); if (ui.gunLbl !== !!g) { ui.gunLbl = !!g; el.bAtk.querySelector('em').textContent = g ? 'FIRE' : 'STRIKE'; el.bAtk.querySelector('.ic').innerHTML = svg(g ? 'fire' : 'sword'); }
+      el.bAtk.classList.toggle('cool', !!g && g.cd > 0); el.bAtk.style.setProperty('--cd', g ? clamp(g.cd / (g.max || 1), 0, 1) : 0);
       el.bShoot.classList.toggle('cool', p.gunT > 0); el.bShoot.style.setProperty('--cd', clamp(p.gunT / st.gunReload, 0, 1));
       el.bDodge.classList.toggle('cool', p.cdRoll > 0); el.bDodge.style.setProperty('--cd', clamp(p.cdRoll / 0.85, 0, 1));
       el.rumN.textContent = s.rum; el.bombN.textContent = s.bombs; el.bSkill.classList.toggle('cool', p.cdWhirl > 0); el.bSkill.style.setProperty('--cd', clamp((p.cdWhirl || 0) / 7, 0, 1));
@@ -151,7 +153,13 @@ export function createUI(game) {
 
   const VIEWS = {
     tavern: {
-      tabs: ['Jobs', 'Bounties', 'Bar'],
+      tabs: ['Jobs', 'Hands', 'Bounties', 'Bar'],
+      Hands(p) {
+        const s = S(), st = shipStats(s), list = hireOffers(p.isl.id), full = s.crew.length >= st.berths;
+        return `<div class="stat"><div><small>Your crew</small><b>${s.crew.length} / ${st.berths} berths</b></div><div><small>Morale</small><b>${moraleWord(s.morale)}</b></div></div><p>Sailors looking for a ship. Each has a trade. Green hands are cheap; veterans cost far more and do far more. New faces drift in every so often.</p>`
+          + (list.length ? list.map((o, i) => row(`${esc(o.name)} · ${GRADES[o.g].name} ${HANDS[o.role].name}`, HANDS[o.role].perk(GRADES[o.g].k), `${costHtml({ gold: hireCost(o) })}${btn('Hire', 'hire', i, 'go', full || s.gold < hireCost(o))}`)).join('') : '<p class="note">Nobody else is looking for work here right now. Try another port, or come back later.</p>')
+          + (full ? '<p class="note">Every berth is taken. Fit crew berths at a shipwright, build Crew Quarters at your hideout, buy a bigger ship, or dismiss someone (Menu, Crew).</p>' : '');
+      },
       Bounties() {
         const s = S();
         return '<p>Named captains with a price on them. Take one poster at a time. Each returns stronger, and worth more, after you collect.</p>'
@@ -194,7 +202,7 @@ export function createUI(game) {
         return Object.entries(SHIP_CLASSES).map(([k, c]) => {
           const owned = !!s.owned[k], cur = s.ship.cls === k, locked = s.level < c.level;
           const right = cur ? '<span class="cost">Your ship</span>' : owned ? btn('Sail her', 'switch', k, 'go') : locked ? `<span class="cost no">Rank ${c.level} needed</span>` : `${costHtml({ gold: c.price })}${btn('Buy', 'buyship', k, 'go', s.gold < c.price)}`;
-          return row(`${c.name} · ${c.role}`, `${c.guns} guns a side · hull ${c.hp} · ${(c.speed * 1.2).toFixed(0)} kn · hold ${c.cargo} · ${c.crew} boarders`, right);
+          return row(`${c.name} · ${c.role}`, `${c.guns} guns a side · hull ${c.hp} · ${(c.speed * 1.2).toFixed(0)} kn · hold ${c.cargo} · ${c.crew + 2} berths`, right);
         }).join('') + '<p class="note" style="margin-top:12px">Upgrades stay with the hull they were fitted to.</p>';
       },
       Colours() { const s = S(); return `<p>Choose your sailcloth. Purely for show.</p><div class="swatches">${Object.entries(SAIL_COLORS).map(([k, c]) => `<button type="button" data-do="sail" data-arg="${k}" class="${s.ship.sail === k ? 'on' : ''}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="${k} sails"></button>`).join('')}</div>`; },
@@ -221,13 +229,13 @@ export function createUI(game) {
       },
     },
     menu: {
-      tabs: ['Menu', 'Quests', 'Orders', 'Deeds', 'Captain', 'Gear', 'Ship', 'Crew', 'Pets', 'Factions', 'Flags', 'Friends', 'Help', 'Settings'],
+      tabs: ['Menu', 'Quests', 'Command', 'Orders', 'Deeds', 'Captain', 'Gear', 'Ship', 'Crew', 'Pets', 'Factions', 'Flags', 'Friends', 'Help', 'Settings'],
       Menu() {
         const s = S(), st = shipStats(s), o = game.quests.objective(), d = game.quests.daily(), ready = d.tasks.filter((t) => t.n >= t.goal && !t.claimed).length + (d.login ? 0 : 1), deeds = DEEDS.filter((x) => !s.deeds[x.id] && x.stat(s) >= x.goal).length;
         const tile = (tab, ic, sub, hot) => `<button type="button" class="tile${hot ? ' hot' : ''}" ${tab === 'Map' ? 'data-do="map"' : `data-tab="${tab}"`}>${svg(ic)}<b>${tab}</b><small>${esc(sub)}</small></button>`;
         return `<div class="tiles">${[
           tile('Quests', 'quest', o.title), tile('Map', 'map', 'Chart, legend, set a course'), tile('Orders', 'quest', ready ? `${ready} to claim` : `Day ${d.streak} · ${d.tasks.filter((t) => t.claimed).length}/3 done`, ready > 0), tile('Deeds', 'chest', deeds ? `${deeds} to claim` : `${Object.keys(s.deeds).length} of ${DEEDS.length} done`, deeds > 0), tile('Captain', 'person', `Rank ${s.level} ${RANKS[Math.min(RANKS.length - 1, s.level - 1)]}`),
-          tile('Gear', 'sword', SWORDS[s.sword].name), tile('Ship', 'ship', `${st.cls.name} · hull ${Math.round(s.ship.hp * 100)}%`), tile('Crew', 'crew', `${st.crew} boarders · ${s.hostages.length}/${st.brig} prisoners`),
+          tile('Gear', 'sword', SWORDS[s.sword].name), tile('Ship', 'ship', `${st.cls.name} · hull ${Math.round(s.ship.hp * 100)}%`), tile('Crew', 'crew', `${s.crew.length}/${st.berths} hands · ${s.hostages.length}/${st.brig} prisoners`), tile('Command', 'anchor', `${STATIONS[s.station].name} · crew ${moraleWord(s.morale).toLowerCase()}`, s.morale < 25),
           tile('Pets', 'paw', s.pet ? PETS[s.pet].name : 'None with you'), tile('Factions', 'scales', isWanted(s) ? `Navy: ${standing(s.rep.navy)}` : 'Who trusts you', isWanted(s)), tile('Flags', 'flag', `Flying: ${FLAGS[s.flag]}`),
           tile('Friends', 'friends', 'Comes with online play'), tile('Help', 'talk', 'How to play'), tile('Settings', 'gear', 'Sound, graphics, backup'),
         ].join('')}</div>`;
@@ -253,9 +261,23 @@ export function createUI(game) {
           + `<h3>In the hold</h3><p>${cargo.length ? cargo.map((g) => `${s.cargo[g]} ${GOODS[g].name.toLowerCase()}`).join(', ') : 'Empty.'}${s.questCargo ? ` Plus ${s.questCargo} crates of job cargo.` : ''}</p>`;
       },
       Crew() {
-        const s = S(), st = shipStats(s);
-        return `<div class="stat"><div><small>Boarders</small><b>${st.crew}</b></div><div><small>From the ship</small><b>${st.cls.crew + Math.floor(s.ship.up.crew / 2)}</b></div><div><small>From crew quarters</small><b>${s.base.b.quarters || 0}</b></div><div><small>Brig</small><b>${s.hostages.length} / ${st.brig}</b></div></div><p>Boarders fight beside you when you take a ship. Fit crew berths at a shipwright or build Crew Quarters at your hideout for more.</p>`
+        const s = S(), st = shipStats(s), b = crewBonus(s), n = s.crew.filter((h) => h.ashore).length, pct = (v) => Math.round(v * 100);
+        return `<div class="stat"><div><small>Hands</small><b>${s.crew.length} / ${st.berths}</b></div><div><small>Morale</small><b>${moraleWord(s.morale)}</b></div><div><small>Landing party</small><b>${Math.min(3, n)} / 3</b></div><div><small>Brig</small><b>${s.hostages.length} / ${st.brig}</b></div></div>`
+          + `<p>Crew adds: cannons +${pct(b.dmg)}%, reload +${pct(b.reload)}%, speed +${pct(b.speed)}%, hull mending ${b.repair.toFixed(1)}/s, plunder +${pct(b.loot)}%. Up to six hands board beside you. Up to three you pick go ashore with you. If one dies, he is gone and morale drops. Hire more at any tavern (Hands).</p>`
+          + (s.crew.length ? s.crew.map((h) => row(`${esc(h.name)} · ${GRADES[h.g].name} ${HANDS[h.role].name}`, HANDS[h.role].perk(GRADES[h.g].k), `${btn(h.ashore ? 'Ashore ✓' : 'Ashore', 'ashore', h.id, h.ashore ? 'go' : '', !h.ashore && n >= 3)}${btn('Dismiss', 'dismiss', h.id, 'bad')}`)).join('') : '<p class="note">You sail alone. Taverns have hands for hire.</p>')
           + `<h3>Prisoners</h3>${s.hostages.length ? s.hostages.map((h) => row(`Captain of the ${esc(h.from)}`, 'Ransom him at any tavern. Some ports pay more, or pay in favour.', `<span class="cost">about ${h.value} gold</span>`)).join('') : `<p class="note">${st.brig ? 'The cells are empty. Board a ship, or accept a surrender and take a prisoner.' : 'No brig yet. A shipwright can fit cells (Refit, Brig cells) so you can take captains for ransom.'}</p>`}`;
+      },
+      Command() {
+        const s = S(), sea = game.sea, n = Math.max(1, s.crew.length), rumN = Math.ceil(n / 2), share = 25 * n, cargo = Object.values(s.cargo).reduce((a, c) => a + c, 0);
+        return `<div class="stat"><div><small>Morale</small><b>${moraleWord(s.morale)} (${Math.round(s.morale)})</b></div><div><small>Hands</small><b>${s.crew.length}</b></div></div><div class="bar2"><i style="width:${Math.round(s.morale)}%"></i></div><p>A happy crew sails faster and loads quicker. Wins raise morale. Lost hands, sinking and defeat lower it. Below 20 hands desert in port.</p>`
+          + '<h3>Stations</h3>' + Object.entries(STATIONS).map(([k, d]) => row(d.name, d.desc, btn(s.station === k ? 'Set ✓' : 'Order', 'station', k, s.station === k ? 'go' : ''))).join('')
+          + '<h3>Orders</h3>'
+          + row('Fire at will', 'Gunners fire the broadside themselves whenever an enemy bears. Works while you walk the deck too.', btn(s.atWill ? 'On ✓' : 'Off', 'atwill', '', s.atWill ? 'go' : ''))
+          + row('Double-shot the guns', 'Next broadside hits 60% harder, but scatters and takes longer to reload.', btn(sea.double ? 'Loaded ✓' : 'Load', 'dshot', '', sea.double ? 'go' : '', !!sea.double))
+          + row('Brace for impact', 'Halves damage to the hull for 10 seconds.', btn(sea.braceT > 0 ? 'Braced ✓' : sea.braceCd > 0 ? `${Math.ceil(sea.braceCd)}s` : 'Brace', 'brace', '', '', sea.braceCd > 0))
+          + row('Lighten ship', `Throw all ${cargo} cargo overboard to run 20% faster for a while.`, btn('Jettison', 'lighten', '', 'bad', cargo < 1))
+          + row('Rum ration', `Break out ${rumN} rum for the hands. Morale +12. You carry ${s.rum}.`, btn('Pour', 'ration', '', '', s.rum < rumN || s.morale >= 100))
+          + row('Share out the plunder', `${share} gold between the hands. Morale +20.`, `${costHtml({ gold: share })}${btn('Pay', 'share', '', '', s.gold < share || s.morale >= 100)}`);
       },
       Pets() {
         const s = S();
@@ -325,6 +347,15 @@ export function createUI(game) {
     },
   };
   // what a port will give for a prisoner
+  function hireOffers(port) {
+    const s = S();
+    if (!s.hire || s.hire.port !== port || Date.now() - s.hire.t > 10 * 60000) {
+      const roles = Object.keys(HANDS), list = [];
+      for (let i = 0; i < 5; i++) { const r = Math.random(), g = r < 0.5 ? 0 : r < 0.85 || s.level < 3 ? 1 : 2; list.push(makeHand(i === 0 ? 'deckhand' : roles[1 + Math.floor(Math.random() * (roles.length - 1))], i === 0 ? 0 : g)); }
+      s.hire = { port, t: Date.now(), list };
+    }
+    return s.hire.list;
+  }
   function ransomDeal(port, h) {
     if (port === 'regal' && h.faction === 'pirate') return { label: 'Hand over', gold: Math.round(h.value * 0.6), rep: { navy: 18, guild: 5 }, text: 'The navy pays a bounty for Bloodwater captains and thinks better of you.' };
     if (port === 'shoals' && h.faction === 'navy') return { label: 'Sell', gold: Math.round(h.value * 1.25), rep: { smug: 8, blood: 14, navy: -6 }, text: 'The smugglers pass navy officers to the Bloodwater for a fat price.' };
@@ -336,6 +367,16 @@ export function createUI(game) {
     accept(i, p) { const err = game.quests.accept(p.isl.id, +i); if (err) ui.toast(err, 'warn'); else audio.good(); },
     abandon(id) { game.quests.abandon(id); },
     rum() { if (pay(S(), { gold: 30 })) { S().rum++; audio.coin(); } },
+    hire(i) { const s = S(), o = s.hire.list[+i]; if (!o || s.crew.length >= shipStats(s).berths || !pay(s, { gold: hireCost(o) })) return; s.hire.list.splice(+i, 1); o.ashore = (HANDS[o.role].land || o.role === 'deckhand') && s.crew.filter((h) => h.ashore).length < 3; s.crew.push(o); game.sea.refreshStats(); audio.good(); ui.toast(`${o.name} signs your articles.`, 'gold'); },
+    dismiss(id) { const s = S(), k = s.crew.findIndex((h) => h.id === id); if (k >= 0) { const h = s.crew.splice(k, 1)[0]; game.sea.refreshStats(); audio.ui(); ui.toast(`${h.name} is paid off.`, 'dim'); } },
+    ashore(id) { const s = S(), h = s.crew.find((x) => x.id === id); if (h) { h.ashore = !h.ashore; audio.ui(); } },
+    station(k) { const s = S(); s.station = k; game.sea.refreshStats(); audio.ui(); ui.toast(`"${STATIONS[k].name}, aye!"`, 'gold'); },
+    atwill() { const s = S(); s.atWill = !s.atWill; audio.ui(); },
+    dshot() { game.sea.double = true; audio.ui(); ui.toast('The guns are double-shotted.', 'gold'); },
+    brace() { const sea = game.sea; sea.braceT = 10; sea.braceCd = 45; audio.ui(); ui.toast('"Brace! Brace!"', 'warn'); },
+    lighten() { const s = S(); s.cargo = {}; game.sea.lightT = 75; audio.ui(); ui.toast('The cargo goes over the side. She leaps ahead.', 'warn'); },
+    ration() { const s = S(), n = Math.ceil(Math.max(1, s.crew.length) / 2); if (s.rum >= n) { s.rum -= n; addMorale(s, 12); game.sea.refreshStats(); audio.good(); ui.toast('A cheer goes up from the hands.', 'gold'); } },
+    share() { const s = S(); if (pay(s, { gold: 25 * Math.max(1, s.crew.length) })) { addMorale(s, 20); game.sea.refreshStats(); audio.coin(); ui.toast('Coin in every palm. The crew would follow you anywhere.', 'gold'); } },
     flask() { const s = S(); if (s.bombs < BOMB.max && pay(s, BOMB)) { s.bombs++; audio.coin(); } },
     chart() { const s = S(); if (pay(s, { gold: 220 })) { const isl = ISLANDS.filter((i) => i.kind !== 'hideout')[Math.floor(Math.random() * 8)]; s.maps.push({ island: isl.id, spot: Math.random() < 0.5 ? 0 : 1, tier: 2 }); audio.coin(); ui.toast(`The chart shows ${isl.name}. See Maps in your log.`, 'gold'); } },
     bribe() { const s = S(); if (pay(s, { gold: bribeCost(s) })) { s.rep.navy = -15; audio.coin(); ui.toast('The clerk loses some paperwork. The navy cools toward you.', 'gold'); } },

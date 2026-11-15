@@ -44,7 +44,7 @@ export const SHIP_UPGRADES = {
   sails: { name: 'Sailcloth', desc: '+5% speed and turning', gold: 130, timber: 6, iron: 0 },
   cannons: { name: 'Gun deck', desc: '+15% damage, faster reload', gold: 180, timber: 4, iron: 12 },
   hold: { name: 'Cargo hold', desc: '+25% cargo space', gold: 110, timber: 14, iron: 0 },
-  crew: { name: 'Crew berths', desc: '+1 fighter when boarding (every 2 levels)', gold: 160, timber: 8, iron: 4 },
+  crew: { name: 'Crew berths', desc: '+1 berth for a hired hand (every 2 levels)', gold: 160, timber: 8, iron: 4 },
   brig: { name: 'Brig cells', desc: 'Holds one more prisoner for ransom', gold: 220, timber: 10, iron: 14 },
 };
 export const MAX_UPGRADE = 5;
@@ -79,7 +79,7 @@ export const BUILDINGS = {
   lumber: { name: 'Lumber Camp', desc: 'Cuts timber while you are away.', gold: 120, timber: 0, iron: 4, prod: { timber: 30 }, fx: (l) => `${l * 30} timber / hour` },
   mine: { name: 'Iron Mine', desc: 'Digs iron while you are away.', gold: 180, timber: 16, iron: 0, prod: { iron: 18 }, fx: (l) => `${l * 18} iron / hour` },
   still: { name: 'Distillery', desc: 'Sells rum to passing ships for steady gold.', gold: 260, timber: 24, iron: 8, prod: { gold: 140 }, fx: (l) => `${l * 140} gold / hour` },
-  quarters: { name: 'Crew Quarters', desc: 'Houses fighters who board beside you.', gold: 300, timber: 30, iron: 6, fx: (l) => `+${l} boarding crew` },
+  quarters: { name: 'Crew Quarters', desc: 'More berths, so you can hire more hands.', gold: 300, timber: 30, iron: 6, fx: (l) => `+${l} crew berths` },
   battery: { name: 'Gun Battery', desc: 'Shore guns. Defends the cove once raiders come.', gold: 340, timber: 18, iron: 30, fx: (l) => `Defence ${l * 100}` },
 };
 export const MAX_BUILDING = 3;
@@ -99,6 +99,9 @@ export const FOES = {
   chief: { name: 'Bandit Chief', hp: 260, dmg: 18, speed: 4.0, tele: 0.5, look: 'captain', scale: 1.2, mini: true, xp: 130, gold: [120, 200] },
   matriarch: { name: 'Crab Matriarch', hp: 280, dmg: 18, speed: 3.8, tele: 0.7, look: 'crab', heavy: true, scale: 2, mini: true, xp: 140, gold: [80, 160] },
   crew: { name: 'Crewmate', hp: 70, dmg: 11, speed: 4.0, tele: 0.5, look: 'crew' },
+  h_bravo: { name: 'Swordmaster', hp: 95, dmg: 21, speed: 4.8, tele: 0.4, look: 'bravo' },
+  h_musket: { name: 'Musketeer', hp: 60, dmg: 19, speed: 4.0, tele: 0.8, look: 'musketeer', ranged: true },
+  h_bruiser: { name: 'Bruiser', hp: 190, dmg: 17, speed: 3.5, tele: 0.6, look: 'bruiser', scale: 1.12 },
 };
 
 // Sea enemies.
@@ -209,3 +212,27 @@ for (const b of BOUNTIES) { SEA_FOES[b.id] = { name: b.ship, cls: b.cls, faction
 // What lives in each island's cave.
 export const CAVE_FOES = { bones: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'warden'], tooth: ['skeleton', 'skeleton', 'skeleton', 'warden'], saltmere: ['brigand', 'brigand', 'marksman', 'chief'], regal: ['brigand', 'brigand', 'marksman', 'chief'], blood: ['brigand', 'brigand', 'brigand', 'brute'], crab: ['crab', 'crab', 'crab', 'crab', 'matriarch'] };
 export const BOMB = { name: 'Powder flask', desc: 'Throw it at a knot of enemies. It bursts on landing and hurts everything close.', gold: 45, max: 6 };
+
+// ----- hired hands: each has a trade. Better grades cost more and do more. -----
+const pc = (v) => Math.round(v * 100);
+export const HANDS = {
+  deckhand: { name: 'Deckhand', gold: 60, foe: 'crew', fight: 1, perk: () => 'A plain pair of hands. Fights well enough.' },
+  gunner: { name: 'Gunner', gold: 200, foe: 'crew', fight: 0.8, dmg: 0.06, reload: 0.03, perk: (k) => `Cannons hit ${pc(0.06 * k)}% harder and load ${pc(0.03 * k)}% faster.` },
+  rigger: { name: 'Rigger', gold: 190, foe: 'crew', fight: 0.8, speed: 0.035, perk: (k) => `Ship sails and turns ${pc(0.035 * k)}% faster.` },
+  carpenter: { name: 'Carpenter', gold: 230, foe: 'crew', fight: 0.7, repair: 0.35, perk: (k) => `Mends the hull at sea, ${(0.35 * k).toFixed(1)} a second.` },
+  surgeon: { name: 'Surgeon', gold: 300, foe: 'crew', fight: 0.6, heal: 0.3, perk: (k) => `Hands who fall have a ${pc(Math.min(0.85, 0.3 + 0.3 * k))}% chance to live. Rum heals you more.` },
+  quarter: { name: 'Quartermaster', gold: 280, foe: 'crew', fight: 0.9, loot: 0.05, keep: 0.25, perk: (k) => `${pc(0.05 * k)}% more plunder. Morale falls slower.` },
+  bravo: { name: 'Swordmaster', gold: 260, foe: 'h_bravo', fight: 1, land: true, perk: () => 'Quick and deadly with a blade. Best on raids and boarding.' },
+  musketeer: { name: 'Musketeer', gold: 250, foe: 'h_musket', fight: 1, land: true, perk: () => 'Shoots from a distance on raids and boarding.' },
+  bruiser: { name: 'Bruiser', gold: 290, foe: 'h_bruiser', fight: 1, land: true, perk: () => 'Huge and very hard to kill. Soaks up the blows.' },
+};
+export const GRADES = [{ name: 'Green', k: 1, cost: 1, fight: 0.85 }, { name: 'Able', k: 1.6, cost: 2.4, fight: 1.15 }, { name: 'Veteran', k: 2.4, cost: 5, fight: 1.5 }];
+export const HAND_NAMES = ['Tom', 'Jack', 'Ned', 'Will', 'Sam', 'Bess', 'Moll', 'Anne', 'Kit', 'Abe', 'Finn', 'Joss', 'Cora', 'Dirk', 'Hale', 'Mags', 'Ruth', 'Pike', 'Obed', 'Nell'];
+export const HAND_NICK = ['One-Eye', 'Red', 'Long', 'Mad', 'Lucky', 'Black', 'Old', 'Salt', 'Quick', 'Stump', 'Iron', 'Silent'];
+// where the captain puts the crew
+export const STATIONS = {
+  even: { name: 'All stations even', desc: 'No bonus, no cost.', speed: 1, reload: 1, repair: 0 },
+  sails: { name: 'All hands to the sails', desc: '+15% speed. Guns load 30% slower.', speed: 1.15, reload: 1.3, repair: 0 },
+  guns: { name: 'Man the guns', desc: 'Guns load 25% faster. 12% slower ship.', speed: 0.88, reload: 0.75, repair: 0 },
+  repair: { name: 'Damage parties', desc: 'Crew patch the hull and fight fires. Slower ship and guns.', speed: 0.85, reload: 1.3, repair: 0.005 },
+};

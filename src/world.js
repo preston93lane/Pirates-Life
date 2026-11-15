@@ -519,20 +519,20 @@ export function createWorld(scene) {
   // ----- the cave room (shared by every cave mouth) -----
   platforms.push(CAVE);
   { const k = new Kit(KINDS), c = CAVE;
-    k.add(box(c.hw * 2 + 8, 1, c.hl * 2 + 8), 0x3a3a3c, [c.x, c.top - 0.5, c.z], [0, 0, 0], 1, 0.1, 'stone');
-    for (let i = 0; i < 34; i++) { const t = (i / 34) * TAU, x = c.x + Math.sin(t) * (c.hw + 3.5), z = c.z + Math.cos(t) * (c.hl + 3.5), s = 3 + (i % 3) * 0.9; k.add(new THREE.DodecahedronGeometry(1, 0), i % 2 ? 0x34343a : 0x2a2a30, [x, c.top + s * 0.9, z], [i, i * 2, i * 0.5], [s, s * 1.9, s], 0.12, 'plain'); }
-    for (let i = 0; i < 9; i++) k.add(cone(0.5 + (i % 3) * 0.3, 2 + (i % 4), 5), 0x3c3c44, [c.x + Math.sin(i * 2.4) * (c.hw - 1.5), c.top + 1 + (i % 4) * 0.5, c.z + Math.cos(i * 1.7) * (c.hl - 2)], [0, i, 0], 1, 0.1, 'plain');
+    k.add(box(c.hw * 2 + 8, 1, c.hl * 2 + 8), 0x6a6258, [c.x, c.top - 0.5, c.z], [0, 0, 0], 1, 0.1, 'stone');
+    for (let i = 0; i < 34; i++) { const t = (i / 34) * TAU, x = c.x + Math.sin(t) * (c.hw + 3.5), z = c.z + Math.cos(t) * (c.hl + 3.5), s = 3 + (i % 3) * 0.9; k.add(new THREE.DodecahedronGeometry(1, 0), i % 2 ? 0x5e574e : 0x4c463f, [x, c.top + s * 0.9, z], [i, i * 2, i * 0.5], [s, s * 1.9, s], 0.12, 'plain'); }
+    for (let i = 0; i < 9; i++) k.add(cone(0.5 + (i % 3) * 0.3, 2 + (i % 4), 5), 0x665e55, [c.x + Math.sin(i * 2.4) * (c.hw - 1.5), c.top + 1 + (i % 4) * 0.5, c.z + Math.cos(i * 1.7) * (c.hl - 2)], [0, i, 0], 1, 0.1, 'plain');
     for (let i = 0; i < 6; i++) { const x = c.x + (i % 2 ? 1 : -1) * (c.hw - 0.5), z = c.z + (Math.floor(i / 2) - 1) * 10; k.add(cyl(0.08, 0.08, 1.6, 4), PAL.timber, [x, c.top + 1.4, z]); k.add(cone(0.28, 0.6, 5), 0xff9a3c, [x, c.top + 2.5, z], [0, 0, 0], 1, 0, 'plain'); }
     for (let i = 0; i < 7; i++) k.add(cone(0.3, 1.3, 4), 0x5fd0c0, [c.x + Math.sin(i * 1.9) * 7, c.top + 0.6, c.z + Math.cos(i * 2.7) * 12], [0.3 * Math.sin(i), i, 0.3 * Math.cos(i)], 1, 0, 'plain');
     const room = k.mesh(); scene.add(room); world.caveRoom = room;
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(30, 12, 8), new THREE.MeshBasicMaterial({ color: 0x08080a, side: THREE.BackSide, fog: false })); dome.scale.y = 0.55; dome.position.set(c.x, c.top, c.z); scene.add(dome);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(30, 12, 8), new THREE.MeshBasicMaterial({ color: 0x2a221a, side: THREE.BackSide, fog: false })); dome.scale.y = 0.55; dome.position.set(c.x, c.top, c.z); scene.add(dome);
   }
 
   // ----- time of day and weather -----
   const KEY = {
-    night: { fog: C(0x1a2536), zen: C(0x070c18), hor: C(0x22324c), sun: C(0x9fb6e6), deep: C(0x06131f), hemi: 1.2, sunI: 0.85, sky: C(0x8499c8) },
-    dawn: { fog: C(0xc59a7c), zen: C(0x46506e), hor: C(0xe8a670), sun: C(0xffb070), deep: C(0x0d2a3a), hemi: 1.5, sunI: 1.9, sky: C(0xe6c8b0) },
-    day: { fog: C(PAL.fog), zen: C(PAL.zenith), hor: C(PAL.horizon), sun: C(PAL.sun), deep: C(PAL.deep), hemi: 2.1, sunI: 2.5, sky: C(0xdfe6ea) },
+    night: { fog: C(0x31425c), zen: C(0x101a30), hor: C(0x3d5278), sun: C(0xb4c6ee), deep: C(0x0c2436), hemi: 1.85, sunI: 1.45, sky: C(0x9db0dc), n: 1 },
+    dawn: { fog: C(0xc59a7c), zen: C(0x46506e), hor: C(0xe8a670), sun: C(0xffb070), deep: C(0x0d2a3a), hemi: 1.9, sunI: 2.0, sky: C(0xe6c8b0), n: 0.3 },
+    day: { fog: C(PAL.fog), zen: C(PAL.zenith), hor: C(PAL.horizon), sun: C(PAL.sun), deep: C(PAL.deep), hemi: 2.1, sunI: 2.5, sky: C(0xdfe6ea), n: 0 },
   };
   const foul = { fog: C(0x444c52), zen: C(0x1c252c), hor: C(0x4f585c), sun: C(0x30302c), deep: C(0x081a22) };
   const cur = { fog: C(0), zen: C(0), hor: C(0), sun: C(0), deep: C(0) };
@@ -544,8 +544,8 @@ export function createWorld(scene) {
     const A = KEY[SEG[i][1]], B = KEY[SEG[i][2]], f = clamp((t - SEG[i][0]) / (SEG[i + 1][0] - SEG[i][0]), 0, 1), k = world.weather, o = world.ocean.material.uniforms;
     for (const n of ['fog', 'zen', 'hor', 'sun', 'deep']) cur[n].copy(A[n]).lerp(B[n], f).lerp(foul[n], k * (n === 'sun' ? 0.8 : 1));
     let hemiI = lerp(A.hemi, B.hemi, f) * (1 - k * 0.45), sunI = lerp(A.sunI, B.sunI, f) * (1 - k * 0.8), dens = 0.00135 + k * 0.0021;
-    world.night = clamp((1.95 - lerp(A.hemi, B.hemi, f)) / 0.75, 0, 1);
-    if (world.cave) { cur.fog.set(0x0d0c0e); hemiI = 1.5; sunI = 0.35; dens = 0.011; }
+    world.night = lerp(A.n, B.n, f);
+    if (world.cave) { cur.fog.set(0x2a221a); hemiI = 2.5; sunI = 0.9; dens = 0.004; }
     shared.uFog.value.copy(cur.fog); shared.uZenith.value.copy(cur.zen); shared.uHorizon.value.copy(cur.hor); shared.uSunCol.value.copy(cur.sun); o.uDeep.value.copy(cur.deep);
     shared.uNight.value = world.night * (1 - k); shared.uLight.value = clamp(hemiI / 2.1, 0.3, 1);
     scene.fog.color.copy(cur.fog); scene.background.copy(cur.fog); scene.fog.density = dens; o.uFogD.value = dens;

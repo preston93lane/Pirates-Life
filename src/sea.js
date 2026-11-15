@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
 import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES } from './data.js';
-import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep } from './state.js';
+import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale } from './state.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
 import { heightAt, nearestIsland } from './world.js';
@@ -122,11 +122,12 @@ export function createSea(game) {
   // ---------- gunnery ----------
   function fire(sh, side, target) {
     if (sh.reload[side] > 0 || !sh.alive) return false;
-    sh.reload[side] = sh.isPlayer ? sh.stats.reload : sh.reloadTime;
+    const dbl = sh.isPlayer && sea.double; if (dbl) sea.double = false;
+    sh.reload[side] = sh.isPlayer ? sh.stats.reload * (dbl ? 1.5 : 1) : sh.reloadTime;
     if (sh.isPlayer) { sea.deaf = 6; sea.exposed = 45; } // gunfire drowns out a siren's song, and gives away false colours
     const kind = sh.isPlayer ? game.save.shot : sh.faction === 'navy' && Math.random() < 0.25 ? 'chain' : (sh.type === 'pirate2' || sh.def.bounty) && Math.random() < 0.25 ? 'fire' : 'round';
     const out = Math.atan2(sh.fz * side, -sh.fx * side); // world bearing of the beam normal
-    sh.muzzles(side).forEach((m, i) => sea.pending.push({ t: i * 0.07 + rand(0.05), sh, side, i, out, target, kind }));
+    sh.muzzles(side).forEach((m, i) => sea.pending.push({ t: i * 0.07 + rand(0.05), sh, side, i, out, target, kind, dbl }));
     return true;
   }
   function shoot(q) {
@@ -139,11 +140,11 @@ export function createSea(game) {
       if (t.speed) { const ft = d / (MUZZLE_V * 0.96); tx += t.fx * t.speed * ft; tz += t.fz * t.speed * ft; d = dist2(m.x, m.z, tx, tz); }
       ang = q.out + clamp(angleDiff(q.out, Math.atan2(tx - m.x, tz - m.z)), -0.5, 0.5);
     }
-    const spread = sh.isPlayer ? 0.022 : 0.05;
+    const spread = sh.isPlayer ? (q.dbl ? 0.05 : 0.022) : 0.05;
     ang += rand(-spread, spread);
     const el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) + rand(-0.006, 0.01) + (m.y > 2 ? -Math.atan2(m.y - 1.5, d) * 0.6 : 0);
     const dx = Math.sin(ang), dz = Math.cos(ang), ce = Math.cos(el);
-    if (sea.balls.length < MAX_BALLS) sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: sh, dmg: sh.isPlayer ? sh.stats.dmg : sh.dmg * (1 - 0.13 * (game.save.mercy || 0)), life: 4, kind: q.kind || 'round' });
+    if (sea.balls.length < MAX_BALLS) sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: sh, dmg: sh.isPlayer ? sh.stats.dmg * (q.dbl ? 1.6 : 1) : sh.dmg * (1 - 0.13 * (game.save.mercy || 0)), life: 4, kind: q.kind || 'round' });
     fx.smoke(m.x + dx, m.y, m.z + dz, [dx, 0, dz], 7);
     const dc = dist2(m.x, m.z, game.camera.position.x, game.camera.position.z);
     audio.cannon(clamp(1.1 - dc / 420, 0.08, 1) * 0.6);
@@ -181,6 +182,7 @@ export function createSea(game) {
     if (kind === 'grapple') { if (mine) { sh.provoked = true; hook(sh); } return; }
     if (kind === 'chain') { dmg *= 0.25; sh.sailHp = Math.max(sh.isPlayer ? 0.4 : 0.2, sh.sailHp - 0.1); if (sh.isPlayer) game.tip('chain', 'Chain shot has cut your rigging. You are slower until it mends itself.'); }
     if (kind === 'fire') { dmg *= 0.5; sh.burn = Math.min(sh.isPlayer ? 7 : 14, sh.burn + 4.5); }
+    if (sh.isPlayer && sea.braceT > 0) dmg *= 0.5;
     sh.hp -= dmg;
     fx.splinters(x, y, z, 10);
     audio.crack(clamp(1.1 - dist2(x, z, game.camera.position.x, game.camera.position.z) / 380, 0.1, 1));
@@ -200,13 +202,13 @@ export function createSea(game) {
     if (sh.isPlayer) { game.playerSunk(); return; }
     if (sea.target === sh) sea.target = null;
     if (by && by.isPlayer) { // sinking pays the most infamy and the least loot
-      dropLoot(sh, 0.35); game.reward({ xp: sea.infamy(sh.def.xp * 1.5) }, `${sh.name} sunk`); game.save.stats.sunk++; sea.offend(sh, 'sink');
+      dropLoot(sh, 0.35); game.reward({ xp: sea.infamy(sh.def.xp * 1.5) }, `${sh.name} sunk`); game.save.stats.sunk++; addMorale(game.save, 3); sea.refreshStats(); sea.offend(sh, 'sink');
       game.emit('sink', { faction: sh.faction, type: sh.type }); if (sh.def.boss) game.emit('boss', { boss: sh.type });
     }
   }
   sea.sink = sink;
   function lootOf(sh, share) {
-    const d = sh.def, out = { gold: Math.round(rand(d.gold[0], d.gold[1]) * share), timber: Math.round(rand(4, 12) * share * (SHIP_CLASSES[d.cls].len < 26 ? 1 : 2)), iron: Math.round(rand(1, 6) * share * (SHIP_CLASSES[d.cls].len < 26 ? 1 : 2)), goods: {} };
+    const d = sh.def, out = { gold: Math.round(rand(d.gold[0], d.gold[1]) * share * (1 + (sea.player.stats.loot || 0))), timber: Math.round(rand(4, 12) * share * (SHIP_CLASSES[d.cls].len < 26 ? 1 : 2)), iron: Math.round(rand(1, 6) * share * (SHIP_CLASSES[d.cls].len < 26 ? 1 : 2)), goods: {} };
     for (let i = 0; i < Math.round(d.goods * share); i++) { const g = pick(Object.keys(GOODS)); out.goods[g] = (out.goods[g] || 0) + 1; }
     return out;
   }
@@ -372,12 +374,14 @@ export function createSea(game) {
     }
     // trade winds: a quiet crossing at full sail gets faster, so long trips do not drag
     const calm = p.sail >= 1 && !sea.kraken && game.world.weather < 0.2 && !sea.ships.some((s) => s.alive && (hostile(s) || s.provoked) && dist2(s.x, s.z, p.x, p.z) < 420);
-    sea.wind = damp(sea.wind || 0, calm ? 1 : 0, calm ? 0.3 : 2.5, dt); p.maxSpeed = p.stats.speed * (1 + 0.75 * sea.wind);
+    sea.wind = damp(sea.wind || 0, calm ? 1 : 0, calm ? 0.3 : 2.5, dt); p.maxSpeed = p.stats.speed * (1 + 0.75 * sea.wind) * (sea.lightT > 0 ? 1.2 : 1);
     if (sea.wind > 0.6) { game.tip('wind', 'Open water and full sail: the trade winds carry you much faster. They drop when enemies are near.'); if (Math.random() < dt * 6) fx.emit(p.x + rand(-30, 30), rand(2, 9), p.z + rand(-30, 30), { color: 0xffffff, speed: 0, dir: [p.fx * 30, 0, p.fz * 30], life: 0.5, size: 0.28, alpha: 0.35, spread: 0 }); }
     if (sea.target && sea.target.def && (hostile(sea.target) || sea.target.provoked)) game.tip('foe', 'Enemy ship. Turn so she sits off your side, then FIRE. Sink her for infamy, or wear her down and board for the whole cargo.', 12);
     if (p.hp < p.maxHp * 0.45) game.tip('hull', 'Your hull is low. Run with full sail and repair at a shipwright. If you sink you keep your ship, but lose some gold and cargo.', 12);
     if (cargoUsed(game.save) > 0) game.tip('cargo', 'You carry goods. Markets pay different prices: tap a port on the chart to see what sells dear there.', 12);
     if (sea.kraken && !sea.kraken.done) p.speed = Math.min(p.speed, 2.5);
+    if (onDeck && game.land.gun) deckGun(dt);
+    else if (game.save.atWill && sea.target && sea.target.def && (hostile(sea.target) || sea.target.provoked) && !sea.target.surrendered) { const t = sea.target, b = p.bearing(t.x, t.z); if (b.off < 0.4 && b.dist < 140 && p.reload[b.side] <= 0) fire(p, b.side, t); }
     if (!onDeck && input.take('primary')) {
       const t = sea.target; let side;
       if (t) side = p.bearing(t.x, t.z).side;
@@ -387,8 +391,8 @@ export function createSea(game) {
     if (input.take('ammo')) { const kinds = Object.keys(AMMO).filter((k) => k === 'round' || game.save.armory[k]), s = game.save; s.shot = kinds[(kinds.indexOf(s.shot) + 1) % kinds.length]; audio.ui(); game.toast(kinds.length > 1 ? `Loading ${AMMO[s.shot].name.toLowerCase()}` : 'Only round shot aboard. Shipwrights sell more.', 'dim'); }
     // swivel gun: aimed by looking; the ring shows where the shot will land
     sea.swivelCd = Math.max(0, (sea.swivelCd || 0) - dt);
-    ring.visible = !!game.save.swivel && !onDeck;
-    if (ring.visible) {
+    ring.visible = (!!game.save.swivel && !onDeck) || (onDeck && !!game.land.gun);
+    if (ring.visible && !onDeck) {
       const c = game.cam, range = 22 + 115 * Math.pow(clamp(1 - (c.pitch - 0.1) / 0.9, 0, 1), 1.3);
       let ax = p.x + Math.sin(c.yaw) * range, az = p.z + Math.cos(c.yaw) * range;
       for (const s of sea.ships) if (s.alive && dist2(s.x, s.z, ax, az) < s.radius + 6) { ax = s.x; az = s.z; }
@@ -402,6 +406,24 @@ export function createSea(game) {
     } else input.pressed.swivel = false;
     if (p.edge && !sea.edgeT) { game.toast('The charts end here. Turn back.', 'warn'); sea.edgeT = 6; }
     if (sea.edgeT) sea.edgeT = Math.max(0, sea.edgeT - dt);
+  }
+  // One gun, worked by hand from the deck. Each gun keeps its own reload, so several people could each take one.
+  sea.gunCd = {};
+  function deckGun(dt) {
+    const p = sea.player, g = game.land.gun, key = g.side + ':' + g.i, out = Math.atan2(p.fz * g.side, -p.fx * g.side), m = p.muzzles(g.side)[g.i];
+    if (!m) { game.land.gun = null; return; }
+    g.aim = clamp(g.aim - input.move.x * 0.7 * dt, -0.6, 0.6); g.range = clamp(g.range + input.move.y * 55 * dt, 25, 150);
+    const ang = out + g.aim; g.face = ang; g.cd = sea.gunCd[key] || 0; g.max = p.stats.reload * 0.55;
+    let ax = m.x + Math.sin(ang) * g.range, az = m.z + Math.cos(ang) * g.range;
+    for (const s of sea.ships) if (s.alive && dist2(s.x, s.z, ax, az) < s.radius + 5) { ax = s.x; az = s.z; }
+    ring.position.set(ax, waveHeight(ax, az, game.time) + 0.4, az); ring.material.opacity = g.cd > 0 ? 0.3 : 0.9;
+    if (input.take('primary')) {
+      if (g.cd > 0) return;
+      sea.gunCd[key] = g.max; sea.exposed = 45; sea.deaf = 6;
+      const d = dist2(m.x, m.z, ax, az), a2 = Math.atan2(ax - m.x, az - m.z), el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) - Math.atan2(m.y - 1, d) * 0.5, dx = Math.sin(a2), dz = Math.cos(a2), ce = Math.cos(el);
+      sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: p, dmg: p.stats.dmg * 1.5, life: 4, kind: game.save.shot });
+      fx.smoke(m.x + dx, m.y, m.z + dz, [dx, 0, dz], 8); audio.cannon(0.8); game.shake(0.35);
+    }
   }
   sea.setSail = (d) => { const p = sea.player, v = clamp(Math.round(p.sail * 2) + d, 0, 2) / 2; if (v !== p.sail) { p.sail = v; audio.ui(); game.toast(['Sails furled', 'Half sail', 'Full sail'][v * 2], 'dim'); } };
 
@@ -432,6 +454,9 @@ export function createSea(game) {
     if (active && p.alive) control(dt);
     for (const s of sea.ships) { if (s.alive && !s.frozen) { if (active) steer(s, dt); else { s.sail = 0; s.rudder = 0; } } s.update(dt, time); }
     p.update(dt, time);
+    sea.braceT = Math.max(0, (sea.braceT || 0) - dt); sea.braceCd = Math.max(0, (sea.braceCd || 0) - dt); sea.lightT = Math.max(0, (sea.lightT || 0) - dt);
+    for (const k in sea.gunCd) sea.gunCd[k] = Math.max(0, sea.gunCd[k] - dt);
+    if (active && p.alive && p.hp < p.maxHp) { p.hp = Math.min(p.maxHp, p.hp + (p.stats.repair + p.stats.stnRepair * p.maxHp) * dt); if (p.stats.stnRepair && p.burn > 0) p.burn -= dt * 2; }
     sea.exposed = Math.max(0, (sea.exposed || 0) - dt); sea.raidT = Math.max(0, (sea.raidT || 0) - dt); sea.hookT = Math.max(0, (sea.hookT || 0) - dt);
     if (p.alive && p.burn > 0 && !p.frozen) { p.burn -= dt; p.hp -= 2 * dt; if (Math.random() < dt * 12) fx.fire(p.x + rand(-3, 3), p.model.deckY + 1.5, p.z + rand(-3, 3), 2); if (p.hp <= 0) sink(p, null); }
     p.sailHp = Math.min(1, p.sailHp + 0.02 * dt); for (const s of sea.ships) if (s.alive) s.sailHp = Math.min(1, s.sailHp + 0.008 * dt);

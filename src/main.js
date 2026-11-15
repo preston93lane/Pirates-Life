@@ -8,7 +8,7 @@ import { createUI } from './ui.js';
 import { createQuests } from './quests.js';
 import { input, initInput } from './input.js';
 import { audio } from './audio.js';
-import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats, pending } from './state.js';
+import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats, pending, addMorale } from './state.js';
 import { setPlayerLook, staticFigure } from './character.js';
 import { ISLANDS, ISLAND, RANKS, FLAGS, RANSOM, FOG_N, WORLD_R } from './data.js';
 import { clamp, damp, rand, waveHeight, dist2 } from './util.js';
@@ -38,6 +38,7 @@ game.toast = (m, t) => game.ui.toast(m, t);
 game.shake = (v) => { game.cam.shake = Math.min(1.6, game.cam.shake + v); };
 game.hitStop = (s) => { game.stop = Math.max(game.stop, s); };
 game.emit = (evt, d) => game.quests.on(evt, d || {});
+game.cheer = (d) => { const s = game.save, before = s.morale; addMorale(s, d); game.sea.refreshStats(); if (before >= 25 && s.morale < 25) game.toast('The crew are muttering. Share out some gold or rum (Menu, Command) before hands start to desert.', 'warn'); };
 game.reward = (r, label) => {
   if (!r) return;
   const s = game.save, before = s.level, up = grant(s, r);
@@ -58,6 +59,7 @@ game.goAshore = (isl) => fade(() => {
   p.x = a.x; p.z = a.z; p.heading = a.heading; p.speed = 0; p.sail = 0; p.rudder = 0; p.frozen = true;
   game.land.enter(isl); game.mode = 'land'; game.cam.yaw = isl.land + Math.PI; game.cam.pitch = 0.3;
   game.save.seen[isl.id] = true; game.save.home = isl.kind === 'town' ? isl.id : game.save.home;
+  { const s = game.save; if (isl.kind === 'town' && s.morale < 20 && s.crew.length > 1 && Math.random() < 0.6) { const h = s.crew.splice(Math.floor(Math.random() * s.crew.length), 1)[0]; game.sea.refreshStats(); game.toast(`${h.name} has had enough and slips away into ${isl.name}. Morale is too low.`, 'warn'); } }
   if (!game.save.tipLand) { game.save.tipLand = true; game.ui.hint('STRIKE to attack. Hold BLOCK just before a blow lands to parry. DODGE when the mark above a foe glows orange.', 12); }
   save();
 });
@@ -87,7 +89,7 @@ function takeColours(sh) {
 game.boardingWon = (enemy) => {
   const sea = game.sea;
   sea.takeLoot(sea.lootOf(enemy, 1.0), 'Plunder'); game.reward({ xp: sea.infamy(enemy.def.xp * 0.8) }, `${enemy.name} taken`); game.save.stats.boarded++;
-  sea.offend(enemy, 'board'); takeColours(enemy); game.emit('board', {});
+  sea.offend(enemy, 'board'); takeColours(enemy); game.emit('board', {}); game.cheer(6);
   if (game.capture(enemy)) game.toast('Their captain goes in irons in your brig. Ransom him at a tavern.', 'gold');
   setTimeout(() => fade(() => {
     game.land.leave(); game.mode = 'sea'; enemy.hp = 0; enemy.alive = false; if (sea.target === enemy) sea.target = null;
@@ -99,7 +101,7 @@ game.boardingWon = (enemy) => {
 game.prize = (sh, how) => {
   const sea = game.sea;
   if (how === 'sink') { sea.sink(sh, sea.player); return; }
-  sea.takeLoot(sea.lootOf(sh, 0.8), 'Prize cargo'); game.reward({ xp: sea.infamy(sh.def.xp * 0.5) }, `${sh.name} yielded`); takeColours(sh);
+  sea.takeLoot(sea.lootOf(sh, 0.8), 'Prize cargo'); game.reward({ xp: sea.infamy(sh.def.xp * 0.5) }, `${sh.name} yielded`); takeColours(sh); game.cheer(3);
   if (how === 'prisoner' && game.capture(sh)) { sea.offend(sh, 'board'); game.toast('Their captain goes in irons in your brig.', 'gold'); } else sea.offend(sh, 'spare');
   sh.surrendered = false; sh.released = true; sh.provoked = false; sh.sail = 1; if (sea.target === sh) sea.target = null;
   game.emit('sink', { faction: sh.faction, type: sh.type }); save();
@@ -117,7 +119,7 @@ const mercy = () => { const s = game.save, before = Math.floor(s.mercy || 0); s.
 game.tip2 = (id, text, secs = 12) => { const s = game.save; if (s.tips[id]) return; s.tips[id] = true; setTimeout(() => game.ui.hint(text, secs), 700); };
 game.tip = (id, text, secs = 10) => { const s = game.save; if (s.tips[id] || game.mode !== 'sea') return; s.tips[id] = true; game.ui.hint(text, secs); };
 game.playerFell = () => setTimeout(() => fade(() => {
-  mercy(); const loss = deathTax(game.save);
+  mercy(); game.cheer(-5); const loss = deathTax(game.save);
   if (game.mode === 'board') {
     const e = game.land.boarding.enemy, p = game.sea.player; game.land.leave(); game.mode = 'sea';
     p.hp = Math.max(10, p.hp - p.maxHp * 0.25); [p.x, p.z] = p.at(0, -120); e.provoked = true;
@@ -126,7 +128,7 @@ game.playerFell = () => setTimeout(() => fade(() => {
 }), 1700);
 game.playerSunk = () => setTimeout(() => fade(() => {
   if (game.mode === 'deck') { game.land.leave(); game.mode = 'sea'; }
-  mercy(); const s = game.save, loss = deathTax(s), home = ISLAND[s.home || 'saltmere'], sea = game.sea;
+  mercy(); addMorale(game.save, -12); const s = game.save, loss = deathTax(s), home = ISLAND[s.home || 'saltmere'], sea = game.sea;
   for (const g in s.cargo) s.cargo[g] = Math.floor(s.cargo[g] / 2);
   s.ship.hp = 0.6; s.pos = { x: home.anchor.x, z: home.anchor.z, h: home.anchor.heading };
   game.scene.remove(sea.player.group); sea.player = null; sea.makePlayer(); sea.target = null; game.cam.off = 0; game.land.dockPet(); if (sea.kraken) { for (const a of sea.kraken.arms) scene.remove(a.root); sea.kraken = null; } sea.startEvent && sea.event && sea.startEvent('none');
@@ -162,6 +164,10 @@ function updateCamera(dt) {
   else if (game.mode === 'sea') {
     const p = game.sea.player; c.off -= lx * 0.006; c.pitch = clamp(c.pitch + ly * 0.004, 0.1, 1.0);
     c.yaw = p.heading + c.off; tx = p.x; ty = 5 + p.cls.len * 0.1; tz = p.z; dist = 24 + p.cls.len * 1.15;
+  } else if (game.mode === 'deck' && game.land.gun) { // looking along the barrel
+    const g = game.land.gun, sh = game.sea.player, mz = sh.muzzles(g.side)[g.i];
+    g.aim = clamp(g.aim - lx * 0.004, -0.6, 0.6); g.range = clamp(g.range - ly * 0.35, 25, 150);
+    c.yaw = g.face; c.pitch = 0.3; tx = mz.x; ty = mz.y + 1.2; tz = mz.z; dist = 6.5;
   } else {
     const p = game.land.player; c.yaw -= lx * 0.007; c.pitch = clamp(c.pitch + ly * 0.004, 0.05, 1.1);
     if (c.lookT <= 0 && p.alive) c.yaw -= input.move.x * 1.15 * dt;
@@ -219,6 +225,8 @@ function frame(now) {
     game.ctx = game.mode === 'sea' ? game.sea.context() : game.land.context();
     if (input.take('ctx') && game.ctx) { audio.ui(); game.ctx.run(); }
     if (input.take('menu')) game.ui.openMenu();
+    if (input.take('cmd')) game.ui.openMenu('Command');
+    game.fx.dim = game.world.cave ? 0.4 : 1 - 0.45 * game.world.night;
     if (game.mode === 'sea') { input.pressed.skill = input.pressed.bomb = false; }
     if (game.mode !== 'sea') { input.pressed.sailUp = input.pressed.sailDown = input.pressed.ammo = input.pressed.swivel = false; }
     game.ui.update(raw); soundscape(raw);
