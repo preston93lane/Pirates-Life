@@ -2,7 +2,7 @@
 //   dist/index.html    – full document (open directly, host anywhere, wrap with Capacitor)
 //   dist/fragment.html – same page without <html>/<head>/<body>, for embedding hosts
 import { build } from 'esbuild';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, cp } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -22,10 +22,11 @@ async function make() {
   const page = `${body}\n<script>\n${js}\n</script>`;
   const full = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n` +
     `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">\n` +
-    `<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="theme-color" content="#0b1418">\n` +
+    `<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Pirate's Life">\n<meta name="theme-color" content="#0b1418">\n<link rel="manifest" href="manifest.webmanifest">\n<link rel="apple-touch-icon" href="icon-180.png">\n<link rel="icon" href="icon-192.png">\n` +
     `${head}\n</head>\n<body>\n${page}\n</body>\n</html>\n`;
   await mkdir(path.join(root, 'dist'), { recursive: true });
   await writeFile(path.join(root, 'dist/index.html'), full);
+  await cp(path.join(root, 'public'), path.join(root, 'dist'), { recursive: true });
   await writeFile(path.join(root, 'dist/fragment.html'), `${head}\n${page}\n`);
   return full;
 }

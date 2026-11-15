@@ -355,6 +355,7 @@ export function createUI(game) {
       Settings(p) {
         const g = S().gfx, code = p.backup ? exportSave(S()) : '';
         return row('Sound', 'Everything: cannon, steel, surf and music.', btn(S().muted ? 'Turn on' : 'Turn off', 'mute'))
+          + row('Full screen', 'Hide the browser bars. On iPhone, use Share, then Add to Home Screen instead: the game then opens with no bars at all.', btn(document.fullscreenElement ? 'Leave' : 'Go full screen', 'fullscreen'))
           + row('Music', 'Fiddle and drum. Changes for sailing, towns, night and battle.', btn(S().music === false ? 'Turn on' : 'Turn off', 'music'))
           + row('Graphics', { auto: 'Auto: lowers sharpness by itself if the phone struggles.', low: 'Low: fastest. Softer picture, fewer particles.', high: 'High: sharpest picture, always.' }[g], btn({ auto: 'Auto', low: 'Low', high: 'High' }[g], 'gfx'))
           + row('Start over', 'Erases this voyage for good.', p.confirm ? `${btn('Yes, erase', 'wipe', '', 'bad')}${btn('Keep', 'nowipe')}` : btn('New voyage', 'askwipe', '', 'bad'))
@@ -476,6 +477,7 @@ export function createUI(game) {
     login() { game.quests.claimLogin(); }, daily(i) { game.quests.claimDaily(+i); }, bonus() { game.quests.claimBonus(); }, deed(id) { game.quests.claimDeed(id); },
     bounty(id, p) { const err = game.quests.takeBounty(id, p.isl.id); if (err) ui.toast(err, 'warn'); else { audio.good(); ui.toast('Poster taken. Your compass points to where she was last seen.', 'gold'); } },
     dropbounty() { S().bounty = null; },
+    fullscreen() { if (document.fullscreenElement) document.exitFullscreen(); else game.goFull(true); },
     music() { const s = S(); s.music = s.music === false; audio.setMusic(s.music); },
     gfx() { const o = ['auto', 'low', 'high']; game.setGfx(o[(o.indexOf(S().gfx) + 1) % 3]); },
     backup(_, p) { p.backup = true; },

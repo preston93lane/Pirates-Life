@@ -243,7 +243,10 @@ initInput($('touch'), $('stick'), $('knob'));
 begin(game.save);
 resize();
 game.ui.showTitle(game.hadSave);
+// Fill the whole screen where the browser allows it (not iPhone Safari, and not inside an embedding page).
+game.goFull = (tell) => { try { const el = document.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen; if (!f) { if (tell) game.toast('This browser cannot go full screen. Add the game to your Home Screen instead.', 'warn'); return; } const r = f.call(el); if (r && r.then) r.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* not supported */ } }).catch(() => { if (tell) game.toast('Full screen is blocked here. Open the game at its own address.', 'warn'); }); } catch (e) { /* ignore */ } };
 function start(fresh) {
+  if (window.self === window.top && !window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches && !navigator.standalone) game.goFull(false);
   audio.init(game.save.muted); audio.setMusic(game.save.music !== false);
   if (fresh) begin(newSave());
   game.started = true; game.ui.hideTitle(); game.cam.off = 0; game.cam.pitch = 0.3;
