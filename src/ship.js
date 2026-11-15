@@ -14,6 +14,29 @@ export const STYLES = {
   ghost: { hull: 0x6a8f84, trim: 0x9fe0c8, sail: 0x9fd8c4, flag: 0x9fe0c8 },
 };
 const GHOST_MAT = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: true, opacity: 0.8, emissive: 0x1d5446 });
+const flagTex = new Map();
+// Flags are drawn to small canvases: faction colours, a white flag, and the player's own design.
+export function flagTexture(kind, jolly) {
+  const key = kind === 'pirate' ? `p:${jolly.field}:${jolly.emblem}` : kind; let t = flagTex.get(key); if (t) return t;
+  const c = document.createElement('canvas'); c.width = 96; c.height = 64; const x = c.getContext('2d');
+  const fill = (col) => { x.fillStyle = col; x.fillRect(0, 0, 96, 64); };
+  if (kind === 'navy') { fill('#27406b'); x.fillStyle = '#e6e0cf'; x.fillRect(0, 25, 96, 14); x.fillRect(38, 0, 16, 64); x.fillStyle = '#a3261f'; x.fillRect(0, 29, 96, 6); x.fillRect(43, 0, 6, 64); }
+  else if (kind === 'merchant') { for (let i = 0; i < 4; i++) { x.fillStyle = i % 2 ? '#e0d6bb' : '#b58a2e'; x.fillRect(0, i * 16, 96, 16); } x.fillStyle = '#2a3f55'; x.fillRect(0, 0, 36, 32); }
+  else if (kind === 'bloodwater') { fill('#7d1f1a'); x.fillStyle = '#120c0b'; x.beginPath(); x.moveTo(48, 8); x.quadraticCurveTo(70, 40, 48, 54); x.quadraticCurveTo(26, 40, 48, 8); x.fill(); }
+  else if (kind === 'white') fill('#ece8dc');
+  else if (kind === 'ghost') fill('#9fe0c8');
+  else {
+    const F = { black: '#141414', blood: '#7d1f1a', sea: '#1f4a4f', bone: '#d9cdb0' }[jolly.field] || '#141414', ink = jolly.field === 'bone' ? '#141414' : '#e6dcc2';
+    fill(F); x.fillStyle = ink; x.strokeStyle = ink; x.lineWidth = 6; x.lineCap = 'round';
+    const line = (a, b, c2, d) => { x.beginPath(); x.moveTo(a, b); x.lineTo(c2, d); x.stroke(); };
+    if (jolly.emblem === 'swords') { line(26, 52, 70, 12); line(70, 52, 26, 12); x.lineWidth = 4; line(28, 38, 40, 50); line(68, 38, 56, 50); }
+    else if (jolly.emblem === 'hourglass') { x.beginPath(); x.moveTo(30, 10); x.lineTo(66, 10); x.lineTo(48, 32); x.lineTo(66, 54); x.lineTo(30, 54); x.lineTo(48, 32); x.closePath(); x.fill(); }
+    else if (jolly.emblem === 'crown') { x.beginPath(); x.moveTo(26, 48); x.lineTo(26, 20); x.lineTo(37, 34); x.lineTo(48, 14); x.lineTo(59, 34); x.lineTo(70, 20); x.lineTo(70, 48); x.closePath(); x.fill(); x.strokeStyle = F; x.lineWidth = 3; line(50, 14, 44, 30); line(44, 30, 52, 48); }
+    else { line(28, 58, 68, 42); line(28, 42, 68, 58); x.beginPath(); x.arc(48, 24, 15, 0, 7); x.fill(); x.fillRect(39, 32, 18, 12); x.fillStyle = F; x.beginPath(); x.arc(42, 24, 4, 0, 7); x.arc(54, 24, 4, 0, 7); x.fill(); x.fillRect(46, 31, 4, 5); }
+  }
+  t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; flagTex.set(key, t); return t;
+}
+const FACTION_FLAG = { pirate: 'bloodwater', merchant: 'merchant', navy: 'navy', ghost: 'ghost' };
 const sailGeos = new Map();
 function sailGeo(w, h) {
   const key = `${w.toFixed(1)}:${h.toFixed(1)}`; let g = sailGeos.get(key);
@@ -76,13 +99,14 @@ export function buildShipModel(cls, style, opts = {}) {
   });
   const hullMesh = new THREE.Mesh(m.build(), style === STYLES.ghost ? GHOST_MAT : MAT_2S);
   const group = new THREE.Group(); group.rotation.order = 'YXZ'; group.add(hullMesh);
-  const sailMat = new THREE.MeshLambertMaterial({ color: style.sail, vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: style === STYLES.ghost, opacity: style === STYLES.ghost ? 0.75 : 1, emissive: style === STYLES.ghost ? 0x1d5446 : 0 });
-  const sailMeshes = sails.map((s) => { const sm = new THREE.Mesh(sailGeo(s.w, s.h), sailMat); sm.position.set(0, s.y, s.z); group.add(sm); return sm; });
+  const sailMat = new THREE.MeshLambertMaterial({ color: style.sail, vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: true, opacity: style === STYLES.ghost ? 0.75 : 1, emissive: style === STYLES.ghost ? 0x1d5446 : 0 });
+  const sailMeshes = sails.map((s) => { const sm = new THREE.Mesh(sailGeo(s.w, s.h), sailMat); sm.position.set(0, s.y, s.z); sm.renderOrder = 2; group.add(sm); return sm; });
   // jib
   const fm = mastTop[mastTop.length - 1], jib = new THREE.Mesh(paint(soup([[0, fm[1] * 0.86, fm[2] + 0.3], [0.5, gy(1) + 1.6, z(1) + L * 0.17], [0.2, deckY + 2.2, fm[2] + 1.2]]), 0xffffff, 0), sailMat);
   group.add(jib);
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.3).translate(-1.1, 0, 0), new THREE.MeshLambertMaterial({ color: style.flag, side: THREE.DoubleSide }));
-  const top = mastTop[Math.floor(mastTop.length / 2)]; flag.position.set(0, top[1] - 0.8, top[2]); flag.rotation.y = Math.PI / 2; group.add(flag);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2).translate(-1.7, 0, 0), new THREE.MeshLambertMaterial({ map: flagTexture(opts.flag || FACTION_FLAG[opts.faction] || 'white', opts.jolly), side: THREE.DoubleSide }));
+  jib.renderOrder = 2;
+  const top = mastTop[Math.floor(mastTop.length / 2)]; flag.position.set(0, top[1] - 1.2, top[2]); flag.rotation.y = Math.PI / 2; group.add(flag);
   if (opts.crew !== false) {
     const looks = { player: ['crew', 'crew'], pirate: ['brigand', 'brigand'], merchant: ['crew', 'wright'], navy: ['soldier', 'soldier'], ghost: ['skeleton', 'skeleton'] }[opts.faction || 'player'];
     looks.forEach((lk, i) => { const f = staticFigure(lk); f.position.set((i ? 1 : -1) * B * 0.22, deckY, z(0.45 + i * 0.22)); f.rotation.y = i ? 1.2 : -1.5; group.add(f); });
@@ -98,7 +122,7 @@ export class Ship {
     this.x = o.x || 0; this.z = o.z || 0; this.heading = o.heading || 0; this.speed = 0; this.rudder = 0; this.sail = 0; this.sailVis = 0;
     this.maxSpeed = o.speed || cls.speed; this.turnRate = o.turn || cls.turn; this.maxHp = o.hp || cls.hp; this.hp = this.maxHp;
     this.alive = true; this.sinkT = 0; this.reload = { 1: 0, [-1]: 0 }; this.pitch = 0; this.roll = 0; this.aground = false; this.frozen = false; this.lean = 0;
-    this.radius = cls.len * 0.5;
+    this.radius = cls.len * 0.5; this.sailHp = 1; this.burn = 0;
   }
   get fx() { return Math.sin(this.heading); }
   get fz() { return Math.cos(this.heading); }
@@ -116,9 +140,9 @@ export class Ship {
       return;
     }
     if (!this.frozen) {
-      const target = this.maxSpeed * this.sail * (0.45 + 0.55 * clamp(this.hp / this.maxHp + 0.3, 0, 1));
+      const target = this.maxSpeed * this.sail * (0.45 + 0.55 * clamp(this.hp / this.maxHp + 0.3, 0, 1)) * (0.3 + 0.7 * this.sailHp);
       this.speed = damp(this.speed, target, target > this.speed ? 0.42 : 0.6, dt);
-      const turn = this.turnRate * this.rudder * (0.28 + 0.72 * clamp(this.speed / this.maxSpeed, 0, 1));
+      const turn = this.turnRate * (0.55 + 0.45 * this.sailHp) * this.rudder * (0.28 + 0.72 * clamp(this.speed / this.maxSpeed, 0, 1));
       this.heading = wrapAngle(this.heading - turn * dt); this.lean = damp(this.lean, turn * 0.22, 2, dt);
       let nx = this.x + this.fx * this.speed * dt, nz = this.z + this.fz * this.speed * dt;
       // run aground?
@@ -137,7 +161,8 @@ export class Ship {
     g.position.set(this.x, this.y, this.z); g.rotation.set(this.pitch, this.heading, this.roll);
     this.sailVis = damp(this.sailVis, this.sail, 2.5, dt);
     const sv = 0.16 + 0.84 * this.sailVis;
-    for (const s of this.model.sailMeshes) s.scale.y = sv;
+    this.model.sailMeshes.forEach((s, i) => { s.scale.y = sv; s.visible = i % 2 === 0 ? this.sailHp > 0.3 : this.sailHp > 0.62; });
+    this.model.jib.visible = this.sailHp > 0.45;
     this.model.flag.rotation.y = Math.PI / 2 + Math.sin(time * 3 + this.x) * 0.25;
     for (const s of [1, -1]) if (this.reload[s] > 0) this.reload[s] -= dt;
   }
@@ -146,5 +171,8 @@ export class Ship {
   // which side faces a world point, and how far off the beam it is (0 = dead abeam)
   bearing(x, z) { const [lx, lz] = this.local(x, z); return { side: lx >= 0 ? 1 : -1, off: Math.abs(Math.atan2(lz, Math.abs(lx))), dist: Math.hypot(lx, lz) }; }
   hitTest(x, y, z) { if (y > (this.y || 0) + this.model.fb + 3 || y < -2) return false; const [lx, lz] = this.local(x, z); return Math.abs(lx) < this.cls.beam * 0.55 && Math.abs(lz) < this.cls.len * 0.5; }
+  setFlag(kind, jolly) { this.model.flag.material.map = flagTexture(kind, jolly); this.model.flag.material.needsUpdate = true; }
+  // fade the canvas so it does not block the view of a deck fight
+  fadeSails(on) { const m = this.model.sailMat; m.opacity = on ? 0.16 : this.isPlayer ? 0.72 : this.faction === 'ghost' ? 0.75 : 1; m.depthWrite = !on && !this.isPlayer; }
   dispose(scene) { scene.remove(this.group); this.group.traverse((o) => { if (o.isMesh && o.geometry && !o.geometry.userData.keep && o === this.group.children[0]) o.geometry.dispose(); }); this.model.sailMat.dispose(); }
 }

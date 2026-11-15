@@ -19,10 +19,7 @@
     <div class="tr">
       <canvas id="mini" width="232" height="232"></canvas>
       <div id="place"></div>
-      <div class="menuBtns">
-        <button id="btnMenu" type="button" aria-label="Captain's log"></button>
-        <button id="btnMute" type="button" aria-label="Sound"></button>
-      </div>
+      <button id="btnMenu" type="button"><span class="ic" data-icon="log"></span><em>MENU</em></button>
     </div>
 
     <div id="seaBtns" class="btns" hidden>
@@ -30,6 +27,8 @@
       <button class="act big" data-act="primary" id="bFire" type="button"><span class="ic" data-icon="fire"></span><em>FIRE</em></button>
       <button class="act" data-act="sailUp" id="bUp" type="button"><span class="ic" data-icon="up"></span><em>SAIL</em></button>
       <button class="act" data-act="sailDown" id="bDown" type="button"><span class="ic" data-icon="down"></span><em>REEF</em></button>
+      <button class="act" data-act="ammo" id="bAmmo" type="button"><span class="ic" data-icon="ball"></span><em id="ammoN">ROUND</em></button>
+      <button class="act" data-act="swivel" id="bSwivel" type="button" hidden><span class="ic" data-icon="aim"></span><em>SWIVEL</em></button>
       <div id="sailPips"><i></i><i></i></div>
       <div id="speed"></div>
     </div>
@@ -48,6 +47,15 @@
   <div id="flash"></div>
   <div id="banner" hidden><small></small><b></b><p></p></div>
   <div id="panel" hidden><div class="sheet"><header><h2></h2><button type="button" id="panelClose" aria-label="Close">Close</button></header><nav></nav><div class="body"></div></div></div>
+
+  <div id="map" hidden>
+    <canvas id="mapCv"></canvas>
+    <div class="mapTop"><h2>Chart of the Reach</h2><div><button type="button" class="btn" id="mapLegendBtn">Legend</button><button type="button" class="btn go" id="mapClose">Close</button></div></div>
+    <div class="mapZoom"><button type="button" id="mapIn" aria-label="Zoom in">+</button><button type="button" id="mapOut" aria-label="Zoom out">&minus;</button><button type="button" id="mapMe" aria-label="Centre on your ship">&#9678;</button></div>
+    <div id="mapLegend" hidden></div>
+    <div id="mapInfo" hidden></div>
+    <p class="mapTip">Drag to move. Pinch or use + and &minus; to zoom. Tap a marker for details.</p>
+  </div>
 
   <div id="title">
     <div class="titleBox">

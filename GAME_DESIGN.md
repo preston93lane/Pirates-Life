@@ -160,7 +160,39 @@ taken, a treasure dug), 30+ minutes when the player wants it.
   *Later:* whirlpools, fog banks with wreck salvage, merchant convoys under
   escort, becalmed doldrums, treasure fleets announced server-wide.
 
-### 3.10 Stealing from players and raiding bases (multiplayer design)
+### 3.10 Shot, prizes, flags and factions
+- **Shot types** (bought at a shipwright, switched at sea): round shot for hull
+  damage, chain shot to cripple sails, fire shot to burn the hull and break
+  morale, grappling hooks to haul in and board a ship that still has fight left.
+- **Swivel gun:** a purchasable gun the player aims by looking; a ring on the
+  water shows where it lands. The broadside stays the main weapon.
+- **How you take a ship decides what you get:**
+
+| Outcome | Loot | Infamy | Reputation cost |
+|---|---|---|---|
+| Sink her | About a third, as floating salvage | Most (x1.5) | Worst |
+| Board and win | All of it, plus her flag and a prisoner | Some (x0.8) | Bad |
+| She surrenders, you spare her | Most (80%), plus her flag | Least (x0.5) | Mildest |
+
+- **Surrender:** every crew has morale. Hull damage, fire, a bigger ship than
+  theirs and your own black flag wear it down; when it breaks she strikes her
+  colours and you choose: spare, take the captain too, or sink her anyway.
+- **Prisoners:** a brig (ship upgrade, one cell per level) holds captured
+  captains. Taverns ransom them; Port Regal pays in navy favour for Bloodwater
+  captains, Black Shoals pays extra for navy officers.
+- **Flags:** board a faction's ship to keep its colours. Flying them fools that
+  faction until a ship gets close, and firing gives you away. Your own flag
+  (field and emblem are customizable) pays 25% more infamy and scares crews.
+- **Factions:** Royal Navy, Merchant Guild, Shoals Smugglers, Bloodwater Gang.
+  Standing runs -100 to 100. At Hostile a faction attacks on sight and its port
+  stops giving jobs; at Hunted the navy sends hunters that outgun you. Standing
+  is repaired by that faction's jobs, by sinking their enemies, by handing over
+  prisoners, or by bribing a clerk.
+- **Chart:** tap the compass for a full-screen map with pan and pinch-zoom,
+  fog over waters you have not sailed, named islands, a legend, moving storms,
+  marked dangerous waters, and tap-for-details with a "set course" marker.
+
+### 3.11 Stealing from players and raiding bases (multiplayer design)
 Built in two stages so the game is fun before it needs a big server bill.
 
 1. **Asynchronous raids (first).** You attack a snapshot of another player's

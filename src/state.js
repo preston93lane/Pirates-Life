@@ -3,11 +3,19 @@ import { LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_C
 
 const KEY = 'pirates-life-save-v1';
 
+export const freshUps = () => ({ hull: 0, sails: 0, cannons: 0, hold: 0, crew: 0, brig: 0 });
+function fix(s) { // keep older saves working as the game grows
+  for (const k in s.owned) s.owned[k] = Object.assign(freshUps(), s.owned[k]);
+  s.owned[s.ship.cls] = s.ship.up = Object.assign(freshUps(), s.ship.up || s.owned[s.ship.cls]);
+  return s;
+}
 export function newSave() {
-  return {
+  return fix({
     v: 1, gold: 120, timber: 0, iron: 0, rum: 2, xp: 0, level: 1,
-    ship: { cls: 'sloop', up: { hull: 0, sails: 0, cannons: 0, hold: 0, crew: 0 }, hp: 1, sail: 'bone' },
-    owned: { sloop: { hull: 0, sails: 0, cannons: 0, hold: 0, crew: 0 } },
+    ship: { cls: 'sloop', up: null, hp: 1, sail: 'bone' },
+    owned: { sloop: freshUps() },
+    rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
+    flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,
     sword: 0, gun: 0,
     cargo: {}, questCargo: 0,
     story: { i: 0, n: 0, given: false }, jobs: [], offers: {}, maps: [],
@@ -15,7 +23,7 @@ export function newSave() {
     base: { b: {}, t: Date.now() }, raidAt: 0,
     look: { coat: 'navy', sash: 'red', hat: 'tricorn', skin: 0 }, pets: {}, pet: null,
     wanted: 0, pos: null, stats: { sunk: 0, boarded: 0, kills: 0, dug: 0 }, muted: false,
-  };
+  });
 }
 
 export function loadSave() {
@@ -23,7 +31,7 @@ export function loadSave() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return s && s.v === 1 ? Object.assign(newSave(), s) : null;
+    return s && s.v === 1 ? fix(Object.assign(newSave(), s)) : null;
   } catch (e) { return null; }
 }
 export function writeSave(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* storage unavailable */ } }
@@ -36,7 +44,7 @@ export function shipStats(s) {
   return {
     cls: c, maxHp: Math.round(c.hp * (1 + 0.18 * u.hull)), speed: c.speed * (1 + 0.05 * u.sails), turn: c.turn * (1 + 0.05 * u.sails),
     guns: c.guns, dmg: 9 * (1 + 0.15 * u.cannons), reload: 4.2 * (1 - 0.07 * u.cannons), range: 150,
-    cargo: Math.round(c.cargo * (1 + 0.25 * u.hold)), crew: c.crew + Math.floor(u.crew / 2) + (s.base.b.quarters || 0),
+    brig: u.brig || 0, cargo: Math.round(c.cargo * (1 + 0.25 * u.hold)), crew: c.crew + Math.floor(u.crew / 2) + (s.base.b.quarters || 0),
   };
 }
 export function playerStats(s) {
@@ -84,3 +92,9 @@ export function lookSpec(s) {
   const l = s.look, sash = LOOK_OPTS.sash[l.sash];
   return { coat: LOOK_OPTS.coat[l.coat], sash, hat: l.hat, hatC: l.hat === 'bandana' ? sash : 0x14161a, hair: l.hat === 'none' ? 0x2a1d14 : undefined, skinI: l.skin };
 }
+
+// ----- faction standing -----
+export const isWanted = (s) => s.rep.navy <= -20;
+export const standing = (v) => (v <= -60 ? 'Hunted' : v <= -20 ? 'Hostile' : v < 15 ? 'Wary' : v < 50 ? 'Friendly' : 'Trusted');
+export function addRep(s, f, d) { const before = s.rep[f]; s.rep[f] = Math.max(-100, Math.min(100, before + d)); return (before > -20 && s.rep[f] <= -20) || (before > -60 && s.rep[f] <= -60); }
+export const bribeCost = (s) => Math.max(0, Math.ceil((-15 - s.rep.navy) * 14));

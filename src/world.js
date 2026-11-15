@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ISLANDS, WORLD_R, BUILDINGS } from './data.js';
 import { fbm, noise, smooth, lerp, clamp, rng, WAVES, TAU, SEA } from './util.js';
-import { Mesher, MAT, box, cyl, cone, ball } from './geo.js';
+import { Mesher, Kit, MAT, box, cyl, cone, ball } from './geo.js';
 import { staticFigure } from './character.js';
 
 export const PAL = {
@@ -11,6 +11,7 @@ export const PAL = {
   timber: 0x5c4733, darkTimber: 0x3a2e24, plank: 0x8a6d4b, plaster: 0xbcae90, white: 0xd2c9b4, stone: 0x7f7c74, slate: 0x3b3f45, tile: 0x7c4230, thatch: 0x8f7d4d,
   lit: 0xffc66e, iron: 0x2b2d30, canvas: 0xd9cdb0, red: 0x7d1f1a, copper: 0xa8643a, bone: 0xcfc7b0,
 };
+const KINDS = { [PAL.plaster]: 'plaster', [PAL.white]: 'plaster', [PAL.timber]: 'planks', [PAL.darkTimber]: 'planks', [PAL.plank]: 'planks', 0x80684c: 'planks', [PAL.stone]: 'stone', [PAL.darkRock]: 'stone', 0x8a857a: 'stone', 0x79756b: 'stone', 0x6f6b62: 'stone', [PAL.slate]: 'shingle', [PAL.tile]: 'shingle', 0x2d2b2a: 'shingle', [PAL.thatch]: 'thatch', [PAL.lit]: 'window' };
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, -0.72).normalize();
 
 const N = 84; // terrain grid resolution per island
@@ -208,18 +209,26 @@ function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR) {
 // ---------- structures ----------
 function house(m, isl, p, w, d, h, wall, roof, o = {}) {
   const y = heightAt(p.x, p.z) - 0.2, rot = o.rot ?? Math.atan2(isl.site.x - p.x, isl.site.z - p.z), fx = Math.sin(rot), fz = Math.cos(rot);
-  m.add(box(w, h + 0.4, d), wall, [p.x, y + h / 2, p.z], [0, rot, 0], 1, 0.08);
-  const rg = cone(0.7071, 1, 4); rg.rotateY(Math.PI / 4);
-  const rh = o.roofH ?? Math.min(w, d) * 0.55;
-  m.add(rg, roof, [p.x, y + h + 0.2 + rh / 2, p.z], [0, rot, 0], [w * 1.16, rh, d * 1.16], 0.1);
-  m.add(box(1.2, 2, 0.2), PAL.darkTimber, [p.x + fx * (d / 2), y + 1.2, p.z + fz * (d / 2)], [0, rot, 0]);
-  const wn = Math.max(1, Math.floor(w / 3.2));
-  for (let i = 0; i < wn; i++) for (let f = 0; f < (h > 5 ? 2 : 1); f++) {
-    const off = (i - (wn - 1) / 2) * 2.6 + (wn === 1 ? 1.9 : 0);
-    if (f === 0 && Math.abs(off) < 1.2) continue;
-    m.add(box(0.8, 0.9, 0.16), o.dark ? PAL.iron : PAL.lit, [p.x + fx * (d / 2) + fz * off, y + 1.9 + f * 2.7, p.z + fz * (d / 2) - fx * off], [0, rot, 0], 1, 0);
+  const at = (lx, ly, lz) => [p.x + fx * lz + fz * lx, y + ly, p.z + fz * lz - fx * lx]; // house-local to world
+  m.add(box(w + 0.3, 0.7, d + 0.3), PAL.stone, at(0, 0.35, 0), [0, rot, 0], 1, 0.08);
+  m.add(box(w, h, d), wall, at(0, 0.6 + h / 2, 0), [0, rot, 0], 1, 0.05);
+  const framed = wall === PAL.plaster || wall === PAL.white;
+  if (framed) { // half-timber frame
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.add(box(0.3, h, 0.3), PAL.darkTimber, at(sx * w / 2, 0.6 + h / 2, sz * d / 2), [0, rot, 0]);
+    for (const sz of [-1, 1]) { m.add(box(w, 0.26, 0.2), PAL.darkTimber, at(0, 0.6 + h - 0.13, sz * (d / 2 + 0.02)), [0, rot, 0]); if (h > 5) m.add(box(w, 0.26, 0.2), PAL.darkTimber, at(0, 0.6 + h * 0.5, sz * (d / 2 + 0.02)), [0, rot, 0]); }
+    for (const sx of [-1, 1]) m.add(box(0.2, 0.26, d), PAL.darkTimber, at(sx * (w / 2 + 0.02), 0.6 + h - 0.13, 0), [0, rot, 0]);
   }
-  if (o.chimney) m.add(box(0.9, 2.4, 0.9), PAL.stone, [p.x - fz * w * 0.3, y + h + 1.3, p.z + fx * w * 0.3], [0, rot, 0]);
+  const rg = cone(0.7071, 1, 4); rg.rotateY(Math.PI / 4);
+  const rh = o.roofH ?? Math.min(w, d) * 0.6;
+  m.add(rg, roof, at(0, 0.6 + h + rh / 2, 0), [0, rot, 0], [w * 1.2, rh, d * 1.2], 0.06);
+  m.add(box(1.3, 2.2, 0.16), PAL.darkTimber, at(0, 0.6 + 1.1, d / 2 + 0.04), [0, rot, 0], 1, 0, 'door');
+  m.add(box(1.7, 0.2, 0.3), PAL.darkTimber, at(0, 0.6 + 2.35, d / 2 + 0.08), [0, rot, 0]);
+  const floors = h > 5 ? 2 : 1, win = (lx, ly, lz, ry) => { if (o.dark) m.add(box(0.9, 1.0, 0.14), PAL.iron, at(lx, ly, lz), [0, rot + ry, 0], 1, 0); else { m.add(box(0.95, 1.15, 0.14), PAL.lit, at(lx, ly, lz), [0, rot + ry, 0], 1, 0, 'window'); m.add(box(1.2, 0.12, 0.26), PAL.darkTimber, at(lx, ly - 0.64, lz), [0, rot + ry, 0]); } };
+  const wn = Math.max(2, Math.floor(w / 2.8));
+  for (let f = 0; f < floors; f++) for (let i = 0; i < wn; i++) { const off = (i - (wn - 1) / 2) * (w / wn); if (f === 0 && Math.abs(off) < 1.5) continue; win(off, 0.6 + 1.5 + f * 2.8, d / 2 + 0.03, 0); }
+  for (const sx of [-1, 1]) for (let f = 0; f < floors; f++) win(sx * (w / 2 + 0.03), 0.6 + 1.5 + f * 2.8, 0, Math.PI / 2);
+  if (o.chimney) { m.add(box(1, rh + 1.6, 1), PAL.stone, at(-w * 0.3, 0.6 + h + rh / 2 + 0.3, -d * 0.12), [0, rot, 0]); m.add(box(1.25, 0.25, 1.25), PAL.darkRock, at(-w * 0.3, 0.6 + h + rh + 1.15, -d * 0.12), [0, rot, 0]); }
+  if (o.sign) { m.add(box(0.12, 0.12, 1.5), PAL.iron, at(w * 0.32, 0.6 + 3.1, d / 2 + 0.7), [0, rot, 0]); m.add(box(1.0, 0.7, 0.08), o.sign, at(w * 0.32, 0.6 + 2.6, d / 2 + 1.2), [0, rot + Math.PI / 2, 0]); }
   isl.colliders.push({ x: p.x, z: p.z, r: Math.max(w, d) * 0.52 });
   return { front: { x: p.x + fx * (d / 2 + 2.2), z: p.z + fz * (d / 2 + 2.2) }, rot };
 }
@@ -247,9 +256,9 @@ function town(m, isl, group) {
     isl.npcs.push({ id: `${isl.id}:${kind}`, kind, name, role, x: b.front.x, z: b.front.z }); isl.colliders.push({ x: b.front.x, z: b.front.z, r: 0.5 });
   };
   const names = { saltmere: ['Mara', 'Old Tobias', 'Brenna', 'Quill'], regal: ['Mr. Finch', 'Master Hale', 'Sgt. Dobbs', 'Widow Ames'], shoals: ['One-Eye Sal', 'Rook', 'The Dutchman', 'Nan'] }[isl.id];
-  npc('tavern', names[0], 'Tavern keeper', house(m, isl, L(-24, 0), 13, 9, 6.2, theme.wall, theme.roof, { chimney: true }), 'keeper');
+  npc('tavern', names[0], 'Tavern keeper', house(m, isl, L(-24, 0), 13, 9, 6.2, theme.wall, theme.roof, { chimney: true, sign: 0xb58a2e }), 'keeper');
   npc('shipwright', names[1], 'Shipwright', house(m, isl, L(22, -24), 10, 7, 3.8, theme.alt, theme.roof), 'wright');
-  npc('smith', names[2], 'Blacksmith', house(m, isl, L(-4, -30), 8, 7, 3.6, PAL.stone, theme.roof, { chimney: true, dark: true }), 'smith');
+  npc('smith', names[2], 'Blacksmith', house(m, isl, L(-4, -30), 8, 7, 3.6, PAL.stone, theme.roof, { chimney: true, sign: 0x2b2d30 }), 'smith');
   npc('market', names[3], 'Merchant', house(m, isl, L(-2, 30), 9, 6, 3.4, theme.wall, PAL.thatch), 'merchant');
   [[-38, 24, 7, 6, 3.4], [-40, -22, 6, 6, 3.6], [-44, 2, 6, 7, 5.6], [20, 28, 7, 5, 3.2], [36, 6, 5, 5, 3]].forEach(([u, v, w, d, h], i) => house(m, isl, L(u, v), w, d, h, i % 2 ? theme.alt : theme.wall, i % 2 ? PAL.thatch : theme.roof));
   // well, lamps, clutter
@@ -329,15 +338,16 @@ const BUILD_DRAW = {
 };
 export function refreshBase(world, save) {
   const isl = world.byId.rest;
-  if (world.baseMesh) { world.scene.remove(world.baseMesh); world.baseMesh.geometry.dispose(); }
+  if (world.baseMesh) { world.scene.remove(world.baseMesh); world.baseMesh.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
   isl.colliders = isl.colliders.filter((c) => !c.base);
-  const all = new Mesher();
+  const all = new Kit(KINDS);
   for (const p of isl.plots) {
-    const lvl = save.base.b[p.id] || 0, y = heightAt(p.x, p.z), m = new Mesher();
-    if (lvl) { BUILD_DRAW[p.id](m, lvl); isl.colliders.push({ x: p.x, z: p.z, r: 3.4, base: true }); }
-    else { for (const [x, z] of [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]]) m.add(cyl(0.08, 0.1, 1.1, 4), PAL.timber, [x, 0.55, z]); m.add(box(1.3, 0.8, 0.1), PAL.plank, [0, 1.5, 3.4]); m.add(cyl(0.07, 0.07, 1.8, 4), PAL.timber, [0, 0.9, 3.4]); }
-    const g = m.build(); g.rotateY(p.face + Math.PI); g.translate(p.x, y - 0.1, p.z); all.parts.push(g);
+    const lvl = save.base.b[p.id] || 0, y = heightAt(p.x, p.z);
+    all.origin = new THREE.Matrix4().makeRotationY(p.face + Math.PI).setPosition(p.x, y - 0.1, p.z);
+    if (lvl) { BUILD_DRAW[p.id](all, lvl); isl.colliders.push({ x: p.x, z: p.z, r: 3.4, base: true }); }
+    else { for (const [x, z] of [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]]) all.add(cyl(0.08, 0.1, 1.1, 4), PAL.timber, [x, 0.55, z]); all.add(box(1.3, 0.8, 0.1), PAL.plank, [0, 1.5, 3.4]); all.add(cyl(0.07, 0.07, 1.8, 4), PAL.timber, [0, 0.9, 3.4]); }
   }
+  all.origin = null;
   const s = isl.site, sy = heightAt(s.x, s.z);
   all.add(cyl(1.2, 1.3, 0.3, 7), PAL.darkRock, [s.x, sy + 0.1, s.z]); all.add(cone(0.8, 1.1, 5), 0xff9a3c, [s.x, sy + 0.7, s.z], [0, 0, 0], 1, 0);
   all.add(cyl(0.1, 0.12, 9, 5), PAL.timber, [s.x + 4, sy + 4.5, s.z]); all.add(box(2.6, 1.6, 0.06), 0x161616, [s.x + 5.35, sy + 8, s.z]);
@@ -443,7 +453,7 @@ export function createWorld(scene) {
     world.byId[isl.id] = isl;
     const g = new THREE.Group(); isl.group = g; scene.add(g);
     g.add(terrainMesh(isl));
-    const m = new Mesher();
+    const m = new Kit(KINDS);
     pier(m, isl);
     if (isl.kind === 'town') town(m, isl, g);
     if (isl.kind === 'fort') fort(m, isl);
@@ -458,7 +468,7 @@ export function createWorld(scene) {
   }
 
   // chart of the whole archipelago, used by the minimap and the map screen
-  const S = 320, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const S = 640, cv = document.createElement('canvas'); cv.width = cv.height = S;
   const ctx = cv.getContext('2d'), img = ctx.createImageData(S, S);
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
     const x = (i / S * 2 - 1) * WORLD_R, z = (j / S * 2 - 1) * WORLD_R, h = heightAt(x, z), k = (j * S + i) * 4;

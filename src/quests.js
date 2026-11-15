@@ -1,6 +1,6 @@
 // Story chain and tavern jobs. Both are driven by events the rest of the game emits.
-import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES } from './data.js';
-import { cargoUsed, shipStats } from './state.js';
+import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION } from './data.js';
+import { cargoUsed, shipStats, addRep } from './state.js';
 import { pick, rand, dist2 } from './util.js';
 
 const PORTS = ISLANDS.filter((i) => i.kind === 'town');
@@ -37,7 +37,7 @@ export function createQuests(game) {
       s.story.i++; s.story.n = 0; s.story.given = false; q.begin();
       game.ui.banner('New chapter', q.step().title, q.step().text);
     }
-    for (const job of s.jobs.slice()) if (matches(job.obj, evt, d, job)) { s.jobs.splice(s.jobs.indexOf(job), 1); game.reward(job.reward, `Job done: ${job.title}`); }
+    for (const job of s.jobs.slice()) if (matches(job.obj, evt, d, job)) { s.jobs.splice(s.jobs.indexOf(job), 1); game.reward(job.reward, `Job done: ${job.title}`); for (const f in job.rep || {}) addRep(s, f, job.rep[f]); }
     game.ui.dirty = true;
   };
 
@@ -62,6 +62,7 @@ export function createQuests(game) {
   q.marker = () => {
     const st = q.step(), o = st.obj, p = game.sea.player;
     if (o.type === 'sink') { let best = null, bd = 1e9; for (const sh of game.sea.ships) if (sh.alive && sh.faction === o.faction) { const d = dist2(p.x, p.z, sh.x, sh.z); if (d < bd) { bd = d; best = sh; } } if (best) return { x: best.x, z: best.z, name: best.name }; }
+    if (S().course) return S().course;
     const id = st.mark || (S().jobs[0] && S().jobs[0].mark);
     if (!id) return null;
     if (ZONES[id]) return { x: ZONES[id].x, z: ZONES[id].z, name: ZONES[id].name };
@@ -72,17 +73,17 @@ export function createQuests(game) {
 
   // ----- tavern jobs -----
   function makeJob(port) {
-    const lvl = S().level, r = Math.random(), id = `${Date.now()}-${Math.round(rand(1e6))}`;
+    const home = PORT_FACTION[port], lvl = S().level, r = Math.random(), id = `${Date.now()}-${Math.round(rand(1e6))}`;
     if (r < 0.4) {
       const to = pick(PORTS.filter((p) => p.id !== port)), good = pick(Object.keys(GOODS)), n = 4 + Math.floor(rand(7)), d = dist2(ISLAND[port].x, ISLAND[port].z, to.x, to.z);
-      return { id, type: 'deliver', title: `${GOODS[good].name} for ${to.name}`, text: `Carry ${n} crates of ${GOODS[good].name.toLowerCase()} to the tavern at ${to.name}. Takes ${n} hold space.`, obj: { type: 'deliver', good, n, to: to.id }, cargo: n, mark: to.id, reward: { gold: Math.round(n * GOODS[good].price * 0.7 + d * 0.22), xp: 60 }, n: 0 };
+      return { id, type: 'deliver', title: `${GOODS[good].name} for ${to.name}`, text: `Carry ${n} crates of ${GOODS[good].name.toLowerCase()} to the tavern at ${to.name}. Takes ${n} hold space.`, obj: { type: 'deliver', good, n, to: to.id }, cargo: n, mark: to.id, reward: { gold: Math.round(n * GOODS[good].price * 0.7 + d * 0.22), xp: 60 }, rep: { [home]: 4, [PORT_FACTION[to.id]]: 6 }, n: 0 };
     }
     if (r < 0.7) {
-      const navy = port === 'shoals' && Math.random() < 0.5, n = 1 + Math.floor(rand(Math.min(3, 1 + lvl / 3)));
-      return { id, type: 'sink', title: navy ? 'Bleed the Navy' : 'Thin the Bloodwater', text: `${navy ? 'The smugglers want fewer patrols.' : 'Traders pay to see fewer red sails.'} Sink or board ${n} ${navy ? 'navy' : 'Bloodwater'} ship${n > 1 ? 's' : ''}.`, obj: { type: 'sink', faction: navy ? 'navy' : 'pirate', n }, reward: { gold: (navy ? 320 : 170) * n, xp: 70 * n }, n: 0 };
+      const navy = port === 'shoals' && Math.random() < 0.6, n = 1 + Math.floor(rand(Math.min(3, 1 + lvl / 3)));
+      return { id, type: 'sink', title: navy ? 'Bleed the Navy' : 'Thin the Bloodwater', text: `${navy ? 'The smugglers want fewer patrols.' : 'Traders pay to see fewer red sails.'} Sink or board ${n} ${navy ? 'navy' : 'Bloodwater'} ship${n > 1 ? 's' : ''}.`, obj: { type: 'sink', faction: navy ? 'navy' : 'pirate', n }, reward: { gold: (navy ? 320 : 170) * n, xp: 70 * n }, rep: navy ? { smug: 10, blood: 8 } : { [home]: 6, navy: port === 'regal' ? 12 : 4 }, n: 0 };
     }
     const [foe, isl, per] = pick([['skeleton', 'bones', 46], ['crab', 'crab', 30], ['brigand', 'saltmere', 40]]), n = 3 + Math.floor(rand(4));
-    return { id, type: 'kill', title: `Cull: ${FOES[foe].name}`, text: `Kill ${n} ${FOES[foe].name}${foe === 'brigand' ? ' (bandits camp on the far side of Saltmere and hold Bloodwater Hold)' : ` on ${ISLAND[isl].name}`}.`, obj: { type: 'kill', foe, n }, mark: isl, reward: { gold: per * n, xp: 22 * n }, n: 0 };
+    return { id, type: 'kill', title: `Cull: ${FOES[foe].name}`, text: `Kill ${n} ${FOES[foe].name}${foe === 'brigand' ? ' (bandits camp on the far side of Saltmere and hold Bloodwater Hold)' : ` on ${ISLAND[isl].name}`}.`, obj: { type: 'kill', foe, n }, mark: isl, reward: { gold: per * n, xp: 22 * n }, rep: { [home]: 5 }, n: 0 };
   }
   q.offers = (port) => {
     const o = S().offers;

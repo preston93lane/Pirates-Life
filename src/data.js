@@ -22,9 +22,9 @@ export const ZONES = {
 };
 
 export const SHIP_CLASSES = {
-  sloop: { name: 'Sloop', len: 17, beam: 5.4, masts: 1, guns: 3, hp: 110, speed: 15.5, turn: 0.62, cargo: 20, crew: 2, price: 0, level: 1 },
-  brig: { name: 'Brig', len: 23, beam: 6.6, masts: 2, guns: 5, hp: 210, speed: 14, turn: 0.5, cargo: 40, crew: 3, price: 2400, level: 4 },
-  frigate: { name: 'Frigate', len: 30, beam: 7.8, masts: 3, guns: 8, hp: 360, speed: 13, turn: 0.42, cargo: 64, crew: 4, price: 8500, level: 8 },
+  sloop: { name: 'Sloop', len: 23, beam: 7.2, masts: 1, guns: 3, hp: 110, speed: 15.5, turn: 0.62, cargo: 20, crew: 2, price: 0, level: 1 },
+  brig: { name: 'Brig', len: 31, beam: 8.8, masts: 2, guns: 5, hp: 210, speed: 14, turn: 0.5, cargo: 40, crew: 3, price: 2400, level: 4 },
+  frigate: { name: 'Frigate', len: 40, beam: 10.4, masts: 3, guns: 8, hp: 360, speed: 13, turn: 0.42, cargo: 64, crew: 4, price: 8500, level: 8 },
 };
 
 // Each track has 5 levels. cost(level) = base * (level+1)^1.5
@@ -34,6 +34,7 @@ export const SHIP_UPGRADES = {
   cannons: { name: 'Gun deck', desc: '+15% damage, faster reload', gold: 180, timber: 4, iron: 12 },
   hold: { name: 'Cargo hold', desc: '+25% cargo space', gold: 110, timber: 14, iron: 0 },
   crew: { name: 'Crew berths', desc: '+1 fighter when boarding (every 2 levels)', gold: 160, timber: 8, iron: 4 },
+  brig: { name: 'Brig cells', desc: 'Holds one more prisoner for ransom', gold: 220, timber: 10, iron: 14 },
 };
 export const MAX_UPGRADE = 5;
 
@@ -93,6 +94,7 @@ export const SEA_FOES = {
   pirate2: { name: 'Bloodwater Brig', cls: 'brig', faction: 'pirate', hp: 200, guns: 5, dmg: 7, crew: ['brigand', 'brigand', 'marksman', 'brute', 'captain'], gold: [140, 280], goods: 6, xp: 95, level: 3 },
   navy: { name: 'Navy Brig', cls: 'brig', faction: 'navy', hp: 230, guns: 5, dmg: 7, crew: ['soldier', 'soldier', 'soldier', 'marksman', 'captain'], gold: [120, 240], goods: 4, xp: 110 },
   navy2: { name: 'Navy Frigate', cls: 'frigate', faction: 'navy', hp: 380, guns: 8, dmg: 8, crew: ['soldier', 'soldier', 'soldier', 'marksman', 'marksman', 'brute', 'captain'], gold: [260, 480], goods: 8, xp: 220, level: 6 },
+  hunter: { name: 'Navy Hunter', cls: 'frigate', faction: 'navy', hp: 560, guns: 9, dmg: 10, crew: ['soldier', 'soldier', 'soldier', 'soldier', 'marksman', 'marksman', 'brute', 'captain'], gold: [400, 650], goods: 6, xp: 320 },
   ghost: { name: 'The Drowned Queen', cls: 'frigate', faction: 'ghost', hp: 560, guns: 7, dmg: 9, crew: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'skeleton', 'brute', 'captain'], gold: [900, 1200], goods: 0, xp: 500, boss: true },
 };
 
@@ -126,3 +128,24 @@ export const PETS = {
   cat: { name: "Ship's Cat", perk: 'Lucky. 15% more gold from everything you plunder.', how: 'One-Eye Sal at the Black Shoals tavern sells a mouser for 450 gold.', price: 450, port: 'shoals' },
   parrot: { name: 'Parrot', perk: 'Swoops at foes to stagger them, and spots ships and salvage from farther off.', how: 'Something bright nests by the idol on the Isle of Bones.' },
 };
+
+// Who rules what. Standing runs from -100 to 100; at -20 or below a faction attacks on sight.
+export const FACTIONS = {
+  navy: { name: 'Royal Navy', port: 'regal', blurb: 'Holds Port Regal and patrols the trade lanes. Attack merchants or navy ships and they hunt you. Sink Bloodwater ships, take navy jobs, hand over Bloodwater prisoners, or pay a bribe to cool them down.' },
+  guild: { name: 'Merchant Guild', port: 'saltmere', blurb: 'Runs Saltmere and the merchant sloops. Rob them and Saltmere stops giving you work. Deliveries and killing Bloodwater raiders win them back.' },
+  smug: { name: 'Shoals Smugglers', port: 'shoals', blurb: 'The crews of Black Shoals. They like anyone who hurts the navy and brings them goods or navy prisoners.' },
+  blood: { name: 'Bloodwater Gang', port: 'blood', blurb: 'Red-sailed raiders. Hostile from the start. Smuggler work and ransoming navy officers to them can earn a truce.' },
+};
+export const SHIP_FACTION = { merchant: 'guild', navy: 'navy', pirate: 'blood' };
+export const PORT_FACTION = { saltmere: 'guild', regal: 'navy', shoals: 'smug' };
+export const AMMO = {
+  round: { name: 'Round shot', short: 'ROUND', desc: 'Solid iron. The most hull damage.' },
+  chain: { name: 'Chain shot', short: 'CHAIN', desc: 'Tears sails and rigging so a ship cannot run or turn. Little hull damage.', gold: 450, iron: 20 },
+  fire: { name: 'Fire shot', short: 'FLAME', desc: 'Heated shot. Sets the deck ablaze: the hull burns over time and the crew lose their nerve.', gold: 900, iron: 35 },
+  grapple: { name: 'Grappling hooks', short: 'HOOKS', desc: 'Hook a damaged ship from range and haul her in to board, while she still has fight left.', gold: 600, iron: 30 },
+};
+export const SWIVEL = { name: 'Swivel gun', desc: 'A gun you aim yourself, in any direction. Drag to look: it fires where the ring sits on the water.', gold: 700, iron: 40 };
+export const FLAGS = { pirate: 'Your own colours', merchant: 'Merchant Guild', navy: 'Royal Navy', bloodwater: 'Bloodwater' };
+export const JOLLY = { field: { black: '#141414', blood: '#7d1f1a', sea: '#1f4a4f', bone: '#d9cdb0' }, emblem: { skull: 'Skull and bones', swords: 'Crossed blades', hourglass: 'Hourglass', crown: 'Broken crown' } };
+export const RANSOM = { merchant: 150, pirate: 120, pirate2: 260, navy: 300, navy2: 520, hunter: 800 };
+export const FOG_N = 28;

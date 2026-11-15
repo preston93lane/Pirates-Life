@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { buildCharacter, buildPet } from './character.js';
 import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS } from './data.js';
-import { playerStats, shipStats, collect, deathTax, grant } from './state.js';
+import { playerStats, shipStats, collect, deathTax, grant, isWanted } from './state.js';
 import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './util.js';
 import { groundAt, heightAt, platforms, chestMesh, refreshBase } from './world.js';
 import { input } from './input.js';
@@ -111,7 +111,7 @@ export function createLand(game) {
       const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl); a.spawnI = i;
       if (sp.foe === 'skeleton') { a.state = 'buried'; a.ch.root.visible = false; }
     });
-    if (isl.id === 'regal' && s.wanted > 0) { for (let i = 0; i < 4; i++) { const a = makeActor('soldier', isl.site.x + isl.dir[0] * 18 + rand(-6, 6), isl.site.z + isl.dir[1] * 18 + rand(-6, 6), 1, lvl); a.state = 'chase'; } game.toast('The garrison knows your face!', 'warn'); }
+    if (isl.id === 'regal' && isWanted(s)) { for (let i = 0; i < 4; i++) { const a = makeActor('soldier', isl.site.x + isl.dir[0] * 18 + rand(-6, 6), isl.site.z + isl.dir[1] * 18 + rand(-6, 6), 1, lvl); a.state = 'chase'; } game.toast('The garrison knows your face!', 'warn'); }
     for (const c of isl.chests) addChest(c, !!s.chests[c.id]);
     if (isl.vault) addChest({ x: isl.vault.x, z: isl.vault.z, id: 'vault', tier: 4, vault: true }, !raidReady);
     for (const m of s.maps) if (m.island === isl.id) { const d = isl.digs[m.spot], mesh = new THREE.Mesh(moundGeo, moundMat); mesh.position.set(d.x, heightAt(d.x, d.z) + 0.1, d.z); scene.add(mesh); land.mounds.push(mesh); }
@@ -126,6 +126,7 @@ export function createLand(game) {
     clear(); land.isl = null; land.kind = 'board';
     const ps = game.sea.player, side = ps.bearing(enemy.x, enemy.z).side, s = game.save, lvl = 1 + 0.07 * (s.level - 1);
     enemy.heading = ps.heading; [enemy.x, enemy.z] = ps.at(side * (ps.cls.beam / 2 + enemy.cls.beam / 2 + 0.15), 0);
+    ps.fadeSails(true); enemy.fadeSails(true);
     ps.frozen = enemy.frozen = true; ps.speed = enemy.speed = 0; ps.sail = enemy.sail = 0; ps.lean = enemy.lean = 0;
     const plat = (sh) => { const [x, z] = sh.at(0, sh.cls.len * 0.06); return { x, z, ang: sh.heading, hl: sh.cls.len * 0.34, hw: sh.cls.beam * 0.47 + 0.45, top: sh.model.deckY, ship: sh }; };
     land.boarding = { enemy, plats: [plat(ps), plat(enemy)], won: false, t: 0 };
@@ -140,7 +141,7 @@ export function createLand(game) {
   land.leave = () => {
     clear();
     if (land.player) scene.remove(land.player.ch.root);
-    if (land.boarding) { for (const p of land.boarding.plats) { const i = platforms.indexOf(p); if (i >= 0) platforms.splice(i, 1); } game.sea.player.frozen = false; land.boarding.enemy.frozen = false; land.boarding = null; }
+    if (land.boarding) { for (const p of land.boarding.plats) { const i = platforms.indexOf(p); if (i >= 0) platforms.splice(i, 1); } game.sea.player.frozen = false; land.boarding.enemy.frozen = false; game.sea.player.fadeSails(false); land.boarding.enemy.fadeSails(false); land.boarding = null; }
     land.kind = null; land.isl = null; land.dockPet();
   };
 

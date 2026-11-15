@@ -176,3 +176,46 @@ table.goods .btn { min-width: 48px; padding: 8px; }
 #flash.trance.on { animation-duration: 1.4s; }
 .choices { display: flex; flex-wrap: wrap; gap: 8px; }
 .row small i { display: block; margin-top: 2px; color: var(--brass); }
+
+/* ----- menu button, tappable HUD parts ----- */
+#btnMenu { display: flex; align-items: center; gap: 7px; min-height: 46px; padding: 0 14px 0 10px; border-radius: 6px; border: 1px solid var(--brass); background: rgba(12, 19, 22, .8); }
+#btnMenu svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#btnMenu em { font: 700 12px/1 var(--ui); letter-spacing: .14em; font-style: normal; color: var(--brass); }
+#mini, #quest { pointer-events: auto; cursor: pointer; }
+#bAmmo { right: 104px; bottom: 142px; } #bSwivel { right: 18px; bottom: 128px; }
+#bAmmo em { color: var(--gold); }
+#speed { right: 160px; bottom: 100px; width: 40px; }
+#target small { display: block; font: 600 11px/1.3 var(--ui); letter-spacing: .08em; color: var(--gold); }
+/* ----- menu hub ----- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 10px; }
+.tile { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 2px 10px; padding: 12px; min-height: 64px; text-align: left; border: 1px solid var(--seam); border-radius: 6px; background: var(--leather-2); }
+.tile svg { grid-row: span 2; width: 28px; height: 28px; fill: none; stroke: var(--brass); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tile b { font: 400 17px/1.1 var(--display); letter-spacing: .04em; color: var(--bone); }
+.tile small { font-size: 12px; line-height: 1.2; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.hot { border-color: var(--blood); }
+.meter { position: relative; height: 10px; margin: 6px 0 4px; border-radius: 5px; background: linear-gradient(90deg, #7a241f 0 40%, #6b6247 40% 57.5%, #3f6f58 57.5%); }
+.meter i { position: absolute; top: -3px; width: 4px; height: 16px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 0 1px #000; }
+.flagPrev { width: 96px; height: 64px; border: 1px solid var(--brass-dim); border-radius: 2px; flex: none; image-rendering: auto; }
+.row.col { align-items: flex-start; }
+/* ----- chart ----- */
+#map { position: absolute; inset: 0; background: #d3c292; touch-action: none; }
+#mapCv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.mapTop { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(8px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: linear-gradient(rgba(12, 19, 22, .92), rgba(12, 19, 22, .7)); }
+.mapTop h2 { margin: 0; font: 400 20px/1 var(--display); letter-spacing: .04em; color: var(--brass); }
+.mapTop div { display: flex; gap: 8px; }
+.mapZoom { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
+.mapZoom button { width: 46px; height: 46px; border-radius: 6px; border: 1px solid var(--brass-dim); background: rgba(12, 19, 22, .85); font: 600 22px/1 var(--ui); }
+#mapLegend { position: absolute; top: 60px; right: max(72px, calc(env(safe-area-inset-right, 0px) + 56px)); max-height: calc(100% - 80px); width: min(300px, 70%); overflow-y: auto; padding: 10px 12px; background: rgba(12, 19, 22, .93); border: 1px solid var(--brass-dim); border-radius: 6px; touch-action: pan-y; }
+#mapLegend div { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 14px; line-height: 1.25; }
+#mapLegend canvas { width: 26px; height: 26px; flex: none; background: #d3c292; border-radius: 3px; }
+#mapInfo { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(380px, calc(100% - 32px)); max-height: 62%; overflow-y: auto; padding: 12px 14px; background: rgba(12, 19, 22, .95); border: 1px solid var(--brass); border-radius: 6px; font-size: 14px; line-height: 1.35; touch-action: pan-y; }
+#mapInfo > b { display: block; font: 400 20px/1.1 var(--display); letter-spacing: .03em; color: var(--brass); }
+#mapInfo > small { display: block; margin: 2px 0 8px; color: var(--bone-dim); }
+#mapInfo p { margin: 0 0 8px; }
+.mapBtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.mapTip { position: absolute; left: 50%; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); margin: 0; font-size: 12px; color: #4a3a22; white-space: nowrap; pointer-events: none; }
+#mapInfo:not([hidden]) ~ .mapTip { display: none; }
+/* menu button sits beside the compass in landscape so it never collides with the action buttons */
+.tr { display: grid; grid-template-columns: auto auto; grid-template-areas: "menu mini" ". place"; align-items: start; justify-items: end; gap: 5px 8px; }
+#mini { grid-area: mini; } #place { grid-area: place; } #btnMenu { grid-area: menu; }
+@media (max-aspect-ratio: 1/1) { .tr { grid-template-columns: auto; grid-template-areas: "mini" "place" "menu"; } }

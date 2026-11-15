@@ -40,7 +40,9 @@ be hosted anywhere or wrapped with Capacitor for the app stores.
 | Shoot | SHOOT | F |
 | Drink rum | Bottle | R |
 | Board, go ashore, talk, dig | The gold button | E |
-| Captain's log | Book button | M |
+| Change shot / swivel gun | Shot and SWIVEL buttons | C / V |
+| Menu | MENU button | M |
+| Chart | Tap the compass | N |
 
 ## Layout
 
@@ -54,7 +56,7 @@ src/sea.js        AI ships, gunnery, salvage, Kraken, storms, sirens
 src/land.js       on-foot combat, boarding fights, chests, digging, pets
 src/character.js  people, crabs and companion animals
 src/quests.js     story chain and tavern jobs
-src/ui.js         HUD and menus
+src/ui.js         HUD and menus       src/map.js  the full-screen chart
 src/fx.js         particles          src/audio.js  synthesised sound
 tools/build.mjs   bundles everything into one HTML file
 ```

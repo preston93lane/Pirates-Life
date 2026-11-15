@@ -1,9 +1,9 @@
 // Everything afloat: the player's ship, AI ships, cannon fire, salvage, the Kraken.
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
-import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS } from './data.js';
-import { shipStats, SAIL_COLORS, cargoUsed, grant } from './state.js';
-import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp } from './util.js';
+import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO } from './data.js';
+import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep } from './state.js';
+import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
 import { heightAt, nearestIsland } from './world.js';
 import { input } from './input.js';
@@ -15,7 +15,11 @@ export function createSea(game) {
   const { scene, fx } = game;
   const sea = { ships: [], player: null, loot: [], balls: [], pending: [], target: null, kraken: null, spawnT: 0, targetT: 0, bottleT: 60, zone: null };
 
-  const ballMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.24, 6, 5), new THREE.MeshBasicMaterial({ color: 0x151515 }), MAX_BALLS);
+  const ballMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.24, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX_BALLS);
+  const BALL_COL = { round: new THREE.Color(0x151515), chain: new THREE.Color(0x77777a), fire: new THREE.Color(0xff7a1f), grapple: new THREE.Color(0xc9b58a) };
+  ballMesh.setColorAt(0, BALL_COL.round);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(2.4, 3.1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe9c46a, transparent: true, opacity: 0.85, depthTest: false, fog: false }));
+  ring.renderOrder = 4; ring.visible = false; scene.add(ring);
   ballMesh.frustumCulled = false; ballMesh.count = 0; scene.add(ballMesh);
   const dummy = new THREE.Object3D();
   const crateGeo = new THREE.BoxGeometry(1.5, 1.1, 1.5), crateMat = new THREE.MeshLambertMaterial({ color: 0x8a6d4b, flatShading: true });
@@ -25,8 +29,8 @@ export function createSea(game) {
   sea.makePlayer = () => {
     const s = game.save, st = shipStats(s), old = sea.player;
     const style = Object.assign({}, STYLES.player, { sail: SAIL_COLORS[s.ship.sail] || SAIL_COLORS.bone });
-    const p = new Ship(st.cls, style, { faction: 'player', hp: st.maxHp, speed: st.speed, turn: st.turn });
-    p.isPlayer = true; p.name = 'Your ship'; p.faction = 'player';
+    const p = new Ship(st.cls, style, { faction: 'player', hp: st.maxHp, speed: st.speed, turn: st.turn, flag: s.flag, jolly: s.jolly });
+    p.isPlayer = true; p.name = 'Your ship'; p.faction = 'player'; p.fadeSails(false); // your own canvas is slightly see-through so it never hides the fight
     if (old) { p.x = old.x; p.z = old.z; p.heading = old.heading; scene.remove(old.group); }
     else if (s.pos) { p.x = s.pos.x; p.z = s.pos.z; p.heading = s.pos.h; }
     else { const a = ISLANDS[0].anchor; p.x = a.x; p.z = a.z; p.heading = a.heading; }
@@ -50,7 +54,9 @@ export function createSea(game) {
     if (!pos) return null;
     const lv = 1 + 0.05 * (game.save.level - 1);
     const sh = new Ship(SHIP_CLASSES[def.cls], STYLES[def.faction], { faction: def.faction, guns: def.guns, hp: Math.round(def.hp * lv), speed: SHIP_CLASSES[def.cls].speed * (def.flee ? 0.86 : 0.9) });
-    Object.assign(sh, { x: pos.x, z: pos.z, heading: rand(TAU), type, def, name: def.name, faction: def.faction, dmg: def.dmg * lv, reloadTime: 5.2, provoked: false, way: null, wayT: 0, crew: def.crew.slice() });
+    Object.assign(sh, { x: pos.x, z: pos.z, heading: rand(TAU), type, def, name: def.name, faction: def.faction, dmg: def.dmg * lv, reloadTime: 5.2, provoked: false, way: null, wayT: 0, crew: def.crew.slice(),
+      morale: ({ merchant: 0.55, pirate: 0.95, navy: 1.25 }[def.faction] || 9) - (game.save.flag === 'pirate' ? 0.12 : 0) - (p.cls.len > SHIP_CLASSES[def.cls].len ? 0.15 : 0) });
+    if (type === 'hunter') { sh.hunter = true; sh.provoked = true; sh.maxHp = sh.hp = Math.max(sh.hp, Math.round(p.maxHp * 1.7)); }
     scene.add(sh.group); sea.ships.push(sh); sh.update(0, game.time);
     return sh;
   };
@@ -59,22 +65,36 @@ export function createSea(game) {
     if (count('merchant') < 3) sea.spawn('merchant');
     if (count('pirate') < (lv >= 3 ? 4 : 3)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
     if (count('navy') < 2) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
+    if (game.save.rep.navy <= -60 && !sea.ships.some((s) => s.alive && s.hunter)) { sea.hunterT = (sea.hunterT ?? 20) - 2.5; if (sea.hunterT <= 0) { const pos = openWater(sea.player.x, sea.player.z, 460, 680); if (pos && sea.spawn('hunter', pos)) { sea.hunterT = 100; game.toast('A navy hunter has your scent. She outguns you.', 'warn'); } } }
     const z = ZONES.reach, bossReady = (id) => !game.save.bosses[id] || Date.now() - game.save.bosses[id] > 20 * 60000;
     if (bossReady('ghost') && !count('ghost') && dist2(sea.player.x, sea.player.z, z.x, z.z) < z.r + 150) { const pos = openWater(z.x, z.z, 0, z.r * 0.6); if (pos) { sea.spawn('ghost', pos); game.toast('A pale ship moves in the fog…', 'warn'); } }
     const m = ZONES.maw;
     if (bossReady('kraken') && !sea.kraken && dist2(sea.player.x, sea.player.z, m.x, m.z) < m.r * 0.7) spawnKraken({ boss: true });
   }
 
+  // would this ship attack us if it knew who we were?
+  function grudge(sh) {
+    if (sh.surrendered || sh.released) return false;
+    if (sh.faction === 'ghost') return true;
+    const r = game.save.rep;
+    return sh.faction === 'pirate' ? sh.provoked || r.blood <= -20 : sh.faction === 'navy' ? sh.provoked || r.navy <= -20 : false;
+  }
+  // does the flag we fly fool it?
+  function disguised(sh) {
+    const f = game.save.flag;
+    if (sea.exposed > 0 || sh.provoked || sh.saw || sh.hunter) return false;
+    return sh.faction === 'navy' ? f === 'navy' || f === 'merchant' : sh.faction === 'pirate' ? f === 'bloodwater' : false;
+  }
   function hostile(sh) {
-    if (sh.faction === 'pirate' || sh.faction === 'ghost') return true;
-    if (sh.faction === 'navy') return sh.provoked || game.save.wanted > 0;
-    return false;
+    return grudge(sh) && !disguised(sh);
   }
   function steer(sh, dt) {
     const p = sea.player, d = dist2(sh.x, sh.z, p.x, p.z), toP = Math.atan2(p.x - sh.x, p.z - sh.z);
     let want = sh.heading, sail = 0.55;
-    const aggro = hostile(sh) && p.alive && game.mode !== 'land' && d < (sh.provoked ? 520 : 330);
-    if (sh.def.flee && sh.provoked && d < 420) { want = toP + Math.PI; sail = 1; }
+    if (sh.surrendered) { sh.sail = 0; sh.rudder = 0; return; }
+    if (!sh.saw && d < 115 && grudge(sh) && disguised(sh)) { sh.sus = (sh.sus || 0) + dt * (d < 60 ? 0.42 : 0.15); if (sh.sus > 1) { sh.saw = true; game.toast(`The ${sh.name} has seen through your false colours!`, 'warn'); } }
+    const aggro = hostile(sh) && p.alive && game.mode !== 'land' && d < (sh.hunter ? 3000 : sh.provoked ? 520 : 330);
+    if (sh.released || (sh.def.flee && sh.provoked && d < 420)) { want = toP + Math.PI; sail = 1; if (sh.released && d > 520) sh.gone = true; }
     else if (aggro) {
       if (d > 105) { want = toP; sail = 1; }
       else {
@@ -99,9 +119,10 @@ export function createSea(game) {
   function fire(sh, side, target) {
     if (sh.reload[side] > 0 || !sh.alive) return false;
     sh.reload[side] = sh.isPlayer ? sh.stats.reload : sh.reloadTime;
-    if (sh.isPlayer) sea.deaf = 6; // gunfire drowns out a siren's song
+    if (sh.isPlayer) { sea.deaf = 6; sea.exposed = 45; } // gunfire drowns out a siren's song, and gives away false colours
+    const kind = sh.isPlayer ? game.save.shot : 'round';
     const out = Math.atan2(sh.fz * side, -sh.fx * side); // world bearing of the beam normal
-    sh.muzzles(side).forEach((m, i) => sea.pending.push({ t: i * 0.07 + rand(0.05), sh, side, i, out, target }));
+    sh.muzzles(side).forEach((m, i) => sea.pending.push({ t: i * 0.07 + rand(0.05), sh, side, i, out, target, kind }));
     return true;
   }
   function shoot(q) {
@@ -118,21 +139,53 @@ export function createSea(game) {
     ang += rand(-spread, spread);
     const el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) + rand(-0.006, 0.01) + (m.y > 2 ? -Math.atan2(m.y - 1.5, d) * 0.6 : 0);
     const dx = Math.sin(ang), dz = Math.cos(ang), ce = Math.cos(el);
-    if (sea.balls.length < MAX_BALLS) sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: sh, dmg: sh.isPlayer ? sh.stats.dmg : sh.dmg, life: 4 });
+    if (sea.balls.length < MAX_BALLS) sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: sh, dmg: sh.isPlayer ? sh.stats.dmg : sh.dmg, life: 4, kind: q.kind || 'round' });
     fx.smoke(m.x + dx, m.y, m.z + dz, [dx, 0, dz], 7);
     const dc = dist2(m.x, m.z, game.camera.position.x, game.camera.position.z);
     audio.cannon(clamp(1.1 - dc / 420, 0.08, 1) * 0.6);
     if (sh.isPlayer) game.shake(0.12);
   }
-  sea.damage = (sh, dmg, by, x, y, z) => {
+  // How each faction takes it when you attack, sink, board or spare one of their ships.
+  const REP = {
+    attack: { merchant: { guild: -10, navy: -8 }, navy: { navy: -15 } },
+    sink: { merchant: { guild: -14, navy: -10 }, navy: { navy: -22, smug: 6, blood: 3 }, pirate: { blood: -8, navy: 5, guild: 5 } },
+    board: { merchant: { guild: -9, navy: -6 }, navy: { navy: -16, smug: 6, blood: 3 }, pirate: { blood: -6, navy: 5, guild: 5 } },
+    spare: { merchant: { guild: -3, navy: -3 }, navy: { navy: -8, smug: 3 }, pirate: { blood: -2, navy: 2, guild: 2 } },
+  };
+  sea.offend = (sh, what) => {
+    const t = (REP[what] || {})[sh.faction]; if (!t) return;
+    let crossed = false; for (const f in t) if (addRep(game.save, f, t[f]) && f === 'navy') crossed = true;
+    if (crossed) game.toast(game.save.rep.navy <= -60 ? 'The navy has put a price on your head. Hunters are coming.' : 'You are Wanted. Navy ships will attack on sight.', 'warn');
+    game.ui.dirty = true;
+  };
+  // infamy is worth more under your own flag
+  sea.infamy = (base) => Math.round(base * (game.save.flag === 'pirate' ? 1.25 : 1));
+  function checkSurrender(sh) {
+    if (sh.surrendered || !sh.def || sh.def.boss || sh.hunter || sh.hp <= 0 || sh.frozen) return;
+    if (sh.hp < sh.maxHp * 0.6 && sh.morale <= 0) { sh.surrendered = true; sh.sail = 0; sh.burn = 0; sh.setFlag('white'); audio.good(); game.toast(`The ${sh.name} strikes her colours. Pull alongside to take the prize.`, 'gold'); }
+  }
+  function hook(sh) {
+    if (sea.hookT > 0 || !sh.def) return; sea.hookT = 2;
+    const p = sea.player;
+    if (sh.surrendered) game.toast('She has already struck her colours.', 'dim');
+    else if (sh.hp <= sh.maxHp * 0.7 && dist2(p.x, p.z, sh.x, sh.z) < 120 && !sea.kraken) { game.toast('The hooks bite. Haul her in!', 'gold'); game.board(sh); }
+    else game.toast('They cut the lines. Wear her down to 70% hull first.', 'dim');
+  }
+  sea.damage = (sh, dmg, by, x, y, z, kind = 'round') => {
     if (!sh.alive) return;
+    const mine = by && by.isPlayer && !sh.isPlayer;
+    if (kind === 'grapple') { if (mine) { sh.provoked = true; hook(sh); } return; }
+    if (kind === 'chain') { dmg *= 0.25; sh.sailHp = Math.max(0.2, sh.sailHp - 0.1); }
+    if (kind === 'fire') { dmg *= 0.5; sh.burn = Math.min(14, sh.burn + 4.5); }
     sh.hp -= dmg;
     fx.splinters(x, y, z, 10);
     audio.crack(clamp(1.1 - dist2(x, z, game.camera.position.x, game.camera.position.z) / 380, 0.1, 1));
     if (sh.isPlayer) { game.shake(0.5); game.ui.flash(); }
-    else if (by && by.isPlayer) {
-      if (!sh.provoked && (sh.faction === 'merchant' || sh.faction === 'navy')) { game.save.wanted = Math.min(600, game.save.wanted + (sh.faction === 'navy' ? 240 : 150)); game.toast('You are Wanted. The navy will hunt you.', 'warn'); }
-      sh.provoked = true; game.ui.floatText(x, y + 3, z, Math.round(dmg), '#ffd28a');
+    else if (mine) {
+      if (!sh.provoked) sea.offend(sh, 'attack');
+      sh.provoked = true; sh.morale -= (dmg / sh.maxHp) * 1.6 + (kind === 'chain' ? 0.04 : 0);
+      game.ui.floatText(x, y + 3, z, kind === 'chain' ? 'Rigging' : Math.round(dmg), kind === 'fire' ? '#ff9a4a' : '#ffd28a');
+      checkSurrender(sh);
     }
     if (sh.hp <= 0) sink(sh, by);
   };
@@ -142,8 +195,12 @@ export function createSea(game) {
     fx.splash(sh.x, sh.z, 2.5); audio.crack(1);
     if (sh.isPlayer) { game.playerSunk(); return; }
     if (sea.target === sh) sea.target = null;
-    if (by && by.isPlayer) { dropLoot(sh, 0.6); game.reward({ xp: sh.def.xp }, `${sh.name} sunk`); game.save.stats.sunk++; game.emit('sink', { faction: sh.faction, type: sh.type }); if (sh.def.boss) game.emit('boss', { boss: sh.type }); }
+    if (by && by.isPlayer) { // sinking pays the most infamy and the least loot
+      dropLoot(sh, 0.35); game.reward({ xp: sea.infamy(sh.def.xp * 1.5) }, `${sh.name} sunk`); game.save.stats.sunk++; sea.offend(sh, 'sink');
+      game.emit('sink', { faction: sh.faction, type: sh.type }); if (sh.def.boss) game.emit('boss', { boss: sh.type });
+    }
   }
+  sea.sink = sink;
   function lootOf(sh, share) {
     const d = sh.def, out = { gold: Math.round(rand(d.gold[0], d.gold[1]) * share), timber: Math.round(rand(4, 12) * share * (d.cls === 'sloop' ? 1 : 2)), iron: Math.round(rand(1, 6) * share * (d.cls === 'sloop' ? 1 : 2)), goods: {} };
     for (let i = 0; i < Math.round(d.goods * share); i++) { const g = pick(Object.keys(GOODS)); out.goods[g] = (out.goods[g] || 0) + 1; }
@@ -226,7 +283,7 @@ export function createSea(game) {
   const sirenMat = new THREE.MeshBasicMaterial({ color: 0xa8ecd8 }), sirenRock = new THREE.MeshLambertMaterial({ color: 0x4b4741, flatShading: true });
   function startEvent(type) {
     const p = sea.player;
-    if (type === 'storm') { sea.event = { type, t: 0, dur: rand(45, 60), bolt: 5, warn: 0 }; game.toast('Storm coming. Reef your sails or the rigging will tear.', 'warn'); audio.thunder(); }
+    if (type === 'storm') { sea.event = { type, t: 0, dur: rand(85, 115), bolt: 5, warn: 0, inside: 0, r: 400, x: p.x + p.fx * 330, z: p.z + p.fz * 330, vx: -p.fx * rand(3, 6) + rand(-3, 3), vz: -p.fz * rand(3, 6) + rand(-3, 3) }; game.toast('Storm ahead. Steer around it, or reef your sails inside it.', 'warn'); audio.thunder(); }
     else if (type === 'kraken') spawnKraken({ boss: false });
     else {
       const pos = openWater(p.x + p.fx * 240, p.z + p.fz * 240, 40, 130); if (!pos) return;
@@ -258,7 +315,9 @@ export function createSea(game) {
     }
     e.t += dt;
     if (e.type === 'storm') {
-      const k = clamp(Math.min(e.t / 7, (e.dur - e.t) / 7), 0, 1); game.world.setWeather(k);
+      e.x += e.vx * dt; e.z += e.vz * dt;
+      const k = clamp(Math.min(e.t / 7, (e.dur - e.t) / 7), 0, 1) * (1 - smooth(e.r * 0.5, e.r, dist2(p.x, p.z, e.x, e.z))); game.world.setWeather(k);
+      if (k > 0.5) e.inside += dt;
       const c = game.camera.position;
       for (let i = 0; i < Math.round(k * 16); i++) fx.emit(c.x + rand(-45, 45), c.y + rand(4, 26), c.z + rand(-45, 45), { color: 0xcfd8dc, speed: 0, dir: [9, -48, 3], life: 0.55, size: 0.3, alpha: 0.55, spread: 0 });
       if (active && p.alive) {
@@ -267,7 +326,7 @@ export function createSea(game) {
         e.bolt -= dt;
         if (e.bolt <= 0 && k > 0.4) { e.bolt = rand(4, 9); game.ui.bolt(); audio.thunder(); game.shake(0.35); }
       }
-      if (e.t >= e.dur) { endEvent(); if (active) game.reward({ xp: 45 }, 'You rode out the storm'); }
+      if (e.t >= e.dur) { const rode = e.inside > 12; endEvent(); if (active && rode) game.reward({ xp: 45 }, 'You rode out the storm'); }
     } else if (e.type === 'siren') {
       const d = dist2(p.x, p.z, e.x, e.z);
       e.group.position.y = waveHeight(e.x, e.z, game.time) * 0.3;
@@ -297,6 +356,22 @@ export function createSea(game) {
       else { const cy = game.cam.yaw; side = Math.sin(cy) * p.fz - Math.cos(cy) * p.fx > 0 ? 1 : -1; }
       if (!fire(p, side, t) && p.reload[-side] <= 0 && !t) fire(p, -side, null);
     }
+    if (input.take('ammo')) { const kinds = Object.keys(AMMO).filter((k) => k === 'round' || game.save.armory[k]), s = game.save; s.shot = kinds[(kinds.indexOf(s.shot) + 1) % kinds.length]; audio.ui(); game.toast(kinds.length > 1 ? `Loading ${AMMO[s.shot].name.toLowerCase()}` : 'Only round shot aboard. Shipwrights sell more.', 'dim'); }
+    // swivel gun: aimed by looking; the ring shows where the shot will land
+    sea.swivelCd = Math.max(0, (sea.swivelCd || 0) - dt);
+    ring.visible = !!game.save.swivel;
+    if (ring.visible) {
+      const c = game.cam, range = 22 + 115 * Math.pow(clamp(1 - (c.pitch - 0.1) / 0.9, 0, 1), 1.3);
+      let ax = p.x + Math.sin(c.yaw) * range, az = p.z + Math.cos(c.yaw) * range;
+      for (const s of sea.ships) if (s.alive && dist2(s.x, s.z, ax, az) < s.radius + 6) { ax = s.x; az = s.z; }
+      ring.position.set(ax, waveHeight(ax, az, game.time) + 0.4, az); ring.material.opacity = sea.swivelCd > 0 ? 0.3 : 0.9;
+      if (input.take('swivel') && sea.swivelCd <= 0) {
+        sea.swivelCd = 2.8; sea.exposed = 45; sea.deaf = 6;
+        const my = (p.y || 0) + p.model.deckY + 1.6, d = dist2(p.x, p.z, ax, az), ang = Math.atan2(ax - p.x, az - p.z), el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) - Math.atan2(my - 1, d) * 0.5, dx = Math.sin(ang), dz = Math.cos(ang), ce = Math.cos(el);
+        sea.balls.push({ x: p.x + dx * 2, y: my, z: p.z + dz * 2, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: p, dmg: p.stats.dmg * 1.6, life: 4, kind: game.save.shot });
+        fx.smoke(p.x + dx * 3, my, p.z + dz * 3, [dx, 0, dz], 6); audio.cannon(0.45); game.shake(0.1);
+      }
+    } else input.pressed.swivel = false;
     if (p.edge && !sea.edgeT) { game.toast('The charts end here. Turn back.', 'warn'); sea.edgeT = 6; }
     if (sea.edgeT) sea.edgeT = Math.max(0, sea.edgeT - dt);
   }
@@ -315,7 +390,8 @@ export function createSea(game) {
     const p = sea.player, t = sea.target;
     if (t && t.def && t.alive && !sea.kraken) {
       const d = dist2(p.x, p.z, t.x, t.z);
-      if (t.hp < t.maxHp * 0.42 && d < 42 && p.speed < 11) return { label: 'Board', icon: 'board', run: () => game.board(t) };
+      if (t.surrendered) { if (d < 80 && p.speed < 12) return { label: 'Take the prize', sub: t.name, icon: 'chest', run: () => game.ui.openPrize(t) }; }
+      else if (t.hp < t.maxHp * 0.42 && d < 50 && p.speed < 11) return { label: 'Board', sub: t.name, icon: 'board', run: () => game.board(t) };
     }
     if (p.speed < 11 && !sea.kraken) for (const isl of ISLANDS) if (dist2(p.x, p.z, isl.anchor.x, isl.anchor.z) < 95) return { label: `Go ashore`, sub: isl.name, icon: 'anchor', run: () => game.goAshore(isl) };
     return null;
@@ -326,6 +402,12 @@ export function createSea(game) {
     if (active && p.alive) control(dt);
     for (const s of sea.ships) { if (s.alive && !s.frozen) { if (active) steer(s, dt); else { s.sail = 0; s.rudder = 0; } } s.update(dt, time); }
     p.update(dt, time);
+    sea.exposed = Math.max(0, (sea.exposed || 0) - dt); sea.hookT = Math.max(0, (sea.hookT || 0) - dt);
+    for (const s of sea.ships) if (s.alive && s.burn > 0 && !s.frozen) {
+      s.burn -= dt; s.hp -= 3.2 * dt; s.morale -= dt * 0.06;
+      if (Math.random() < dt * 12) fx.fire(s.x + rand(-3, 3), s.model.deckY + 1.5, s.z + rand(-3, 3), 2);
+      if (s.hp <= 0) sink(s, p); else checkSurrender(s);
+    }
     // hulls push apart
     if (active) for (let i = 0; i < sea.ships.length; i++) {
       const a = sea.ships[i]; if (!a.alive) continue;
@@ -347,16 +429,17 @@ export function createSea(game) {
       if (!dead && b.y < 0.2) { fx.splash(b.x, b.z, 0.8); if (Math.random() < 0.4) audio.splash(clamp(1 - dist2(b.x, b.z, p.x, p.z) / 200, 0, 1)); dead = true; }
       if (!dead && heightAt(b.x, b.z) > b.y) { fx.dust(b.x, b.y, b.z, 8); dead = true; }
       if (!dead) {
-        for (const s of sea.ships) if (s !== b.own && s.alive && !(b.own !== p && !s.isPlayer) && s.hitTest(b.x, b.y, b.z)) { sea.damage(s, b.dmg, b.own, b.x, b.y, b.z); dead = true; break; }
+        for (const s of sea.ships) if (s !== b.own && s.alive && !(b.own !== p && !s.isPlayer) && s.hitTest(b.x, b.y, b.z)) { sea.damage(s, b.dmg, b.own, b.x, b.y, b.z, b.kind); dead = true; break; }
         if (!dead && b.own !== p && p.alive && p.hitTest(b.x, b.y, b.z)) { sea.damage(p, b.dmg, b.own, b.x, b.y, b.z); dead = true; }
         if (!dead && sea.kraken && b.own === p) for (const a of sea.kraken.arms) if (a.alive && a.state !== 'rise' && b.y < 20 && dist2(b.x, b.z, a.x, a.z) < 3.2) { hitArm(a, b.dmg, b.x, b.y, b.z); dead = true; break; }
         if (!dead && sea.event && sea.event.type === 'siren' && b.own === p && dist2(b.x, b.z, sea.event.x, sea.event.z) < 9 && b.y < 9) { hitSiren(b.dmg, b.x, b.y, b.z); dead = true; }
       }
       }
       if (dead) { sea.balls.splice(i, 1); continue; }
-      dummy.position.set(b.x, b.y, b.z); dummy.updateMatrix(); ballMesh.setMatrixAt(n++, dummy.matrix);
+      if (b.kind === 'fire' && Math.random() < 0.6) fx.emit(b.x, b.y, b.z, { color: 0xff8a2a, speed: 0.5, life: 0.35, size: 0.9, grow: -1.5, spread: 0.2 });
+      dummy.position.set(b.x, b.y, b.z); dummy.scale.setScalar(b.kind === 'chain' ? 1.6 : 1); dummy.updateMatrix(); ballMesh.setColorAt(n, BALL_COL[b.kind] || BALL_COL.round); ballMesh.setMatrixAt(n++, dummy.matrix);
     }
-    ballMesh.count = n; ballMesh.instanceMatrix.needsUpdate = true;
+    ballMesh.count = n; ballMesh.instanceMatrix.needsUpdate = true; ballMesh.instanceColor.needsUpdate = true;
     // salvage
     for (let i = sea.loot.length - 1; i >= 0; i--) {
       const l = sea.loot[i]; l.life -= dt;
@@ -366,7 +449,7 @@ export function createSea(game) {
       if (near || l.life <= 0) { scene.remove(l.mesh); sea.loot.splice(i, 1); }
     }
     // remove sunk ships
-    for (let i = sea.ships.length - 1; i >= 0; i--) { const s = sea.ships[i]; if (!s.alive && s.sinkT > 9) { s.dispose(scene); sea.ships.splice(i, 1); } }
+    for (let i = sea.ships.length - 1; i >= 0; i--) { const s = sea.ships[i]; if ((!s.alive && s.sinkT > 9) || s.gone) { if (sea.target === s) sea.target = null; s.dispose(scene); sea.ships.splice(i, 1); } }
     updateKraken(dt);
     updateEvent(dt, active);
     // wakes
@@ -380,7 +463,7 @@ export function createSea(game) {
     if (!active) return;
     sea.spawnT -= dt; if (sea.spawnT <= 0) { sea.spawnT = 2.5; populate(); }
     sea.targetT -= dt; if (sea.targetT <= 0) { sea.targetT = 0.3; pickTarget(); }
-    if (game.save.wanted > 0) game.save.wanted = Math.max(0, game.save.wanted - dt);
+    sea.fogT = (sea.fogT || 0) - dt; if (sea.fogT <= 0) { sea.fogT = 0.5; game.reveal(p.x, p.z, game.save.pet === 'parrot' ? 430 : 310); }
     // discovery
     for (const isl of ISLANDS) if (!game.save.seen[isl.id] && dist2(p.x, p.z, isl.x, isl.z) < isl.r + 170) { game.save.seen[isl.id] = true; game.reward({ xp: 25 }, `Discovered ${isl.name}`); game.emit('visit', { island: isl.id }); }
     let zone = null; for (const id in ZONES) { const z = ZONES[id]; if (dist2(p.x, p.z, z.x, z.z) < z.r) zone = id; }

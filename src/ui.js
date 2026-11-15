@@ -1,7 +1,9 @@
 // HUD and menus. Plain DOM over the canvas.
 import * as THREE from 'three';
-import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS } from './data.js';
-import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave } from './state.js';
+import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY } from './data.js';
+import { createMap } from './map.js';
+import { flagTexture } from './ship.js';
+import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps } from './state.js';
 import { heightAt, nearestIsland, refreshBase } from './world.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
@@ -14,6 +16,8 @@ const ICON = {
   shield: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/>',
   dodge: '<path d="M3 12h12M11 7l5 5-5 5M20 5v14"/>',
   gun: '<path d="M2 8h15l3 1v3h-9l-1.5 2.5H7L5.5 19H2.5L4 13H2z"/>',
+  ball: '<circle cx="12" cy="12" r="6.5"/><path d="M8.5 9.5a4.5 4.5 0 0 1 3-1.6"/>', aim: '<circle cx="12" cy="12" r="6"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
+  quest: '<path d="M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h3"/>', person: '<circle cx="12" cy="7" r="4"/><path d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7"/>', ship: '<path d="M3 16h18l-2.5 5h-13zM12 16V3M12 4l6 9h-6M12 6l-5 7h5"/>', crew: '<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20c0-3.5 2.5-6 6-6s6 2.5 6 6M15 14.5c3.5-.5 7 1.5 7 5.5"/>', paw: '<circle cx="7" cy="9" r="1.8"/><circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9" r="1.8"/><path d="M7.5 17c0-3 2-5 4.5-5s4.5 2 4.5 5c0 2-2 2.5-4.5 2.5S7.5 19 7.5 17z"/>', scales: '<path d="M12 3v18M6 21h12M4 7h16M4 7l-2.5 6a3 3 0 0 0 5 0zM20 7l-2.5 6a3 3 0 0 0 5 0z"/>', flag: '<path d="M5 21V3M5 4h13l-3 4.5 3 4.5H5"/>', friends: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-4 3-6.5 7-6.5s7 2.5 7 6.5M17 5.5a3 3 0 0 1 0 5.5M19 14.5c2 .8 3 2.6 3 5.5"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>', map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/>',
   rum: '<path d="M10 2h4v4l2 3v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3z"/><path d="M8 13h8"/>',
   anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v13M5 13c0 4 3 7 7 7s7-3 7-7M8.5 11h7"/>',
   board: '<path d="M4 20L20 4M14 4h6v6M4 9l4 4M9 4l4 4"/>', talk: '<path d="M4 5h16v10H10l-5 4v-4H4z"/>',
@@ -28,9 +32,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export function createUI(game) {
   const ui = { dirty: true, panel: null, floats: [], miniT: 0, hintT: 0 };
-  const el = {}; ['hud', 'hpFill', 'hpText', 'pGold', 'pTimber', 'pIron', 'pHold', 'wanted', 'qTitle', 'qText', 'target', 'tName', 'tFill', 'toasts', 'mini', 'place', 'btnMenu', 'btnMute', 'seaBtns', 'landBtns', 'bFire', 'bShoot', 'bDodge', 'rumN', 'sailPips', 'speed', 'rlP', 'rlS', 'ctx', 'hint', 'floats', 'flash', 'banner', 'panel', 'title', 'fade', 'btnContinue', 'btnNew'].forEach((k) => { el[k] = $(k); });
+  const el = {}; ['hud', 'hpFill', 'hpText', 'pGold', 'pTimber', 'pIron', 'pHold', 'wanted', 'qTitle', 'qText', 'target', 'tName', 'tFill', 'toasts', 'mini', 'place', 'btnMenu', 'btnMute', 'seaBtns', 'landBtns', 'bFire', 'bShoot', 'bDodge', 'rumN', 'sailPips', 'speed', 'rlP', 'rlS', 'ctx', 'hint', 'floats', 'flash', 'banner', 'panel', 'title', 'fade', 'btnContinue', 'btnNew', 'bAmmo', 'ammoN', 'bSwivel', 'quest'].forEach((k) => { el[k] = $(k); });
   for (const s of document.querySelectorAll('[data-icon]')) s.innerHTML = svg(s.dataset.icon);
-  el.btnMenu.innerHTML = svg('log');
   el.pGold.dataset.l = 'Gold'; el.pTimber.dataset.l = 'Timber'; el.pIron.dataset.l = 'Iron'; el.pHold.dataset.l = 'Hold';
   const S = () => game.save, mctx = el.mini.getContext('2d'), v3 = new THREE.Vector3();
   const sheet = { h2: el.panel.querySelector('h2'), nav: el.panel.querySelector('nav'), body: el.panel.querySelector('.body') };
@@ -56,7 +59,7 @@ export function createUI(game) {
   ui.fade = (on) => el.fade.classList.toggle('on', on);
   ui.showTitle = (hasSave) => { el.title.hidden = false; el.hud.hidden = true; el.btnContinue.hidden = !hasSave; };
   ui.hideTitle = () => { el.title.hidden = true; el.hud.hidden = false; };
-  ui.setMute = () => { el.btnMute.innerHTML = svg(S().muted ? 'mute' : 'sound'); };
+  ui.setMute = () => {};
 
   // ---------- per-frame HUD ----------
   ui.update = (dt) => {
@@ -66,11 +69,11 @@ export function createUI(game) {
     el.hpFill.style.transform = `scaleX(${clamp(hp / max, 0, 1)})`; el.hpFill.parentElement.classList.toggle('ship', !onFoot);
     el.hpText.textContent = `${onFoot ? '' : 'HULL '}${Math.ceil(hp)} / ${max}`;
     el.pGold.textContent = s.gold; el.pTimber.textContent = s.timber; el.pIron.textContent = s.iron; el.pHold.textContent = `${cargoUsed(s)}/${sea.player.stats.cargo}`;
-    el.wanted.hidden = !(s.wanted > 0);
+    el.wanted.hidden = !isWanted(s); el.wanted.textContent = s.rep.navy <= -60 ? 'HUNTED' : 'WANTED';
     if (ui.dirty) { const o = game.quests.objective(); el.qTitle.textContent = o.title; el.qText.textContent = o.short; ui.dirty = false; }
     const t = onFoot ? land.focus : sea.target;
     el.target.hidden = !t;
-    if (t) { el.tName.textContent = t.name || t.def.name; el.tFill.style.transform = `scaleX(${clamp(t.hp / t.maxHp, 0, 1)})`; }
+    if (t) { el.tName.textContent = (t.name || t.def.name) + (t.surrendered ? ' (surrendered)' : t.sailHp < 0.6 ? ' (crippled)' : t.burn > 0 ? ' (ablaze)' : ''); el.tFill.style.transform = `scaleX(${clamp(t.hp / t.maxHp, 0, 1)})`; }
     if (!onFoot) {
       const p = sea.player, r = p.stats.reload;
       el.rlP.firstChild.style.setProperty('--p', 1 - clamp(p.reload[1] / r, 0, 1)); el.rlS.firstChild.style.setProperty('--p', 1 - clamp(p.reload[-1] / r, 0, 1));
@@ -78,6 +81,7 @@ export function createUI(game) {
       el.bFire.classList.toggle('ready', ready);
       el.sailPips.children[0].classList.toggle('on', p.sail >= 0.5); el.sailPips.children[1].classList.toggle('on', p.sail >= 1);
       el.speed.textContent = `${Math.max(0, p.speed * 1.2).toFixed(0)} kn`;
+      el.ammoN.textContent = AMMO[s.shot].short; el.bSwivel.hidden = !s.swivel; el.bSwivel.classList.toggle('cool', sea.swivelCd > 0); el.bSwivel.style.setProperty('--cd', clamp((sea.swivelCd || 0) / 2.8, 0, 1));
     } else {
       const p = land.player, st = playerStats(s);
       el.bShoot.classList.toggle('cool', p.gunT > 0); el.bShoot.style.setProperty('--cd', clamp(p.gunT / st.gunReload, 0, 1));
@@ -109,7 +113,7 @@ export function createUI(game) {
     c.drawImage(game.world.chart, -WORLD_R, -WORLD_R, WORLD_R * 2, WORLD_R * 2);
     const dot = (x, z, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x, z, r / k, 0, 7); c.fill(); };
     if (!onFoot) {
-      for (const s of sea.ships) if (s.alive) dot(s.x, s.z, 5, s.faction === 'merchant' ? '#d9c79a' : s.faction === 'navy' ? (S().wanted > 0 || s.provoked ? '#e0524a' : '#7fa3d6') : '#e0524a');
+      for (const s of sea.ships) if (s.alive) dot(s.x, s.z, 5, s.faction === 'merchant' ? '#d9c79a' : s.faction === 'navy' ? (isWanted(S()) || s.provoked ? '#e0524a' : '#7fa3d6') : '#e0524a');
       for (const l of sea.loot) dot(l.x, l.z, 3.5, '#e9c46a');
       if (sea.kraken) for (const a of sea.kraken.arms) if (a.alive) dot(a.x, a.z, 4, '#c678a0');
     } else {
@@ -121,6 +125,7 @@ export function createUI(game) {
     c.fillStyle = '#fff'; c.beginPath(); c.moveTo(me.x + sx * a, me.z + cz * a); c.lineTo(me.x - sx * a * 0.7 + cz * a * 0.6, me.z - cz * a * 0.7 - sx * a * 0.6); c.lineTo(me.x - sx * a * 0.7 - cz * a * 0.6, me.z - cz * a * 0.7 + sx * a * 0.6); c.fill();
     c.restore();
     const m = game.quests.marker();
+    if (S().course && dist2(me.x, me.z, S().course.x, S().course.z) < 90) { S().course = null; ui.toast('You have reached your course marker.', 'dim'); }
     if (m) {
       let dx = -(m.x - me.x) * k, dy = -(m.z - me.z) * k; const d = Math.hypot(dx, dy), lim = Z / 2 - 14;
       if (d > lim) { dx *= lim / d; dy *= lim / d; }
@@ -146,25 +151,33 @@ export function createUI(game) {
     tavern: {
       tabs: ['Jobs', 'Bar'],
       Jobs(p) {
-        const s = S(), o = game.quests.objective(), offers = game.quests.offers(p.isl.id);
+        const s = S(), o = game.quests.objective(), f = PORT_FACTION[p.isl.id], cold = s.rep[f] <= -20, offers = cold ? [] : game.quests.offers(p.isl.id);
+        const repText = (j) => Object.entries(j.rep || {}).filter(([, v]) => v > 0).map(([k, v]) => `+${v} ${FACTIONS[k].name}`).join(' · ');
         return `<h3>${esc(o.title)}</h3><p>${esc(o.text)}</p><p class="note">${esc(o.short)}</p>
-          <h3>On the board</h3>${offers.map((j, i) => row(esc(j.title), esc(j.text), `<span class="cost">${rewardText(j.reward)}</span>${btn('Take', 'accept', i, 'go')}`)).join('')}
+          <h3>On the board</h3>${cold ? `<p class="note">"Not for you. The ${FACTIONS[f].name} want nothing to do with you." Raise your standing with them first (Menu, Factions).</p>` : offers.map((j, i) => row(esc(j.title), `${esc(j.text)}${repText(j) ? `<i>${repText(j)}</i>` : ''}`, `<span class="cost">${rewardText(j.reward)}</span>${btn('Take', 'accept', i, 'go')}`)).join('')}
           ${s.jobs.length ? `<h3>Your jobs</h3>${s.jobs.map((j) => row(esc(j.title), esc(game.quests.shortText(j.obj) + game.quests.progress(j.obj, j.n)), btn('Drop', 'abandon', j.id, 'bad'))).join('')}` : ''}`;
       },
-      Bar() {
-        const s = S(), bounty = Math.ceil(s.wanted * 1.5);
+      Bar(p) {
+        const s = S(), bounty = bribeCost(s), port = p.isl.id;
         return row('Bottle of rum', `Drink in a fight to close your wounds. You carry ${s.rum}.`, `${costHtml({ gold: 30 })}${btn('Buy', 'rum', '', '', s.gold < 30 || s.rum >= 9)}`)
           + row('A stained chart', `Someone's buried secret. You hold ${s.maps.length} of 3 maps.`, `${costHtml({ gold: 220 })}${btn('Buy', 'chart', '', '', s.gold < 220 || s.maps.length >= 3)}`)
-          + Object.entries(PETS).filter(([k, d]) => d.port === ui.panel.isl.id && !s.pets[k]).map(([k, d]) => row(d.name, d.perk, `${costHtml({ gold: d.price })}${btn('Buy', 'pet', k, 'go', s.gold < d.price)}`)).join('')
-          + (s.wanted > 0 ? row('Bribe the harbour clerk', 'Clears your Wanted status with the navy.', `${costHtml({ gold: bounty })}${btn('Pay', 'bribe', '', '', s.gold < bounty)}`) : '')
-          + `<p class="note" style="margin-top:12px">"Bloodwater sloops fly red sails. Merchants run. The navy only minds you once you have given them cause."</p>`;
+          + Object.entries(PETS).filter(([k, d]) => d.port === port && !s.pets[k]).map(([k, d]) => row(d.name, d.perk, `${costHtml({ gold: d.price })}${btn('Buy', 'pet', k, 'go', s.gold < d.price)}`)).join('')
+          + (bounty > 0 ? row('Bribe the harbour clerk', `Cools the Royal Navy toward you (now ${standing(s.rep.navy)}, ${s.rep.navy}).`, `${costHtml({ gold: bounty })}${btn('Pay', 'bribe', '', '', s.gold < bounty)}`) : '')
+          + (s.hostages.length ? `<h3>Prisoners in your brig</h3>${s.hostages.map((h, i) => { const d = ransomDeal(port, h); return row(`Captain of the ${esc(h.from)}`, d.text, `<span class="cost">${d.gold} gold</span>${btn(d.label, 'ransom', i, 'go')}`); }).join('')}` : '')
+          + `<p class="note" style="margin-top:12px">"Sink a ship and they will fear your name. Board her and you keep the whole cargo. And a captain in irons is worth more than his sword."</p>`;
       },
     },
     shipwright: {
-      tabs: ['Refit', 'Ships', 'Colours'],
+      tabs: ['Refit', 'Armoury', 'Ships', 'Colours'],
+      Armoury() {
+        const s = S();
+        return '<p>Your broadside fires whatever is loaded. Switch shot at sea with the shot button beside FIRE.</p>'
+          + Object.entries(AMMO).map(([k, a]) => row(a.name, a.desc, k === 'round' || s.armory[k] ? '<span class="cost">Aboard</span>' : `${costHtml(a)}${btn('Buy', 'ammo', k, 'go', !can(s, a))}`)).join('')
+          + row(SWIVEL.name, SWIVEL.desc, s.swivel ? '<span class="cost">Fitted</span>' : `${costHtml(SWIVEL)}${btn('Fit', 'swivel', '', 'go', !can(s, SWIVEL))}`);
+      },
       Refit() {
         const s = S(), st = shipStats(s), rc = repairCost(s);
-        return `<div class="stat"><div><small>Hull</small><b>${Math.round(s.ship.hp * st.maxHp)} / ${st.maxHp}</b></div><div><small>Speed</small><b>${(st.speed * 1.2).toFixed(1)} kn</b></div><div><small>Guns a side</small><b>${st.guns}</b></div><div><small>Hold</small><b>${st.cargo}</b></div><div><small>Boarders</small><b>${st.crew}</b></div></div>`
+        return `<div class="stat"><div><small>Hull</small><b>${Math.round(s.ship.hp * st.maxHp)} / ${st.maxHp}</b></div><div><small>Speed</small><b>${(st.speed * 1.2).toFixed(1)} kn</b></div><div><small>Guns a side</small><b>${st.guns}</b></div><div><small>Hold</small><b>${st.cargo}</b></div><div><small>Boarders</small><b>${st.crew}</b></div><div><small>Brig cells</small><b>${st.brig}</b></div></div>`
           + row('Repair the hull', rc ? 'Patch every hole and scrape the keel.' : 'She is sound.', `${costHtml({ gold: rc })}${btn('Repair', 'repair', '', 'go', !rc || s.gold < rc)}`)
           + Object.entries(SHIP_UPGRADES).map(([k, u]) => { const lv = s.ship.up[k], c = upgradeCost(s, k), full = lv >= MAX_UPGRADE; return row(`${u.name}${pips(lv, MAX_UPGRADE)}`, u.desc, full ? '<span class="cost">Complete</span>' : `${costHtml(c)}${btn('Fit', 'upgrade', k, '', !can(s, c))}`); }).join('');
       },
@@ -200,41 +213,102 @@ export function createUI(game) {
       },
     },
     menu: {
-      tabs: ['Log', 'Chart', 'Maps', 'Captain', 'Look', 'Pets', 'Settings'],
-      Look() {
-        const l = S().look, hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+      tabs: ['Menu', 'Quests', 'Captain', 'Gear', 'Ship', 'Crew', 'Pets', 'Factions', 'Flags', 'Friends', 'Settings'],
+      Menu() {
+        const s = S(), st = shipStats(s), o = game.quests.objective();
+        const tile = (tab, ic, sub, hot) => `<button type="button" class="tile${hot ? ' hot' : ''}" ${tab === 'Map' ? 'data-do="map"' : `data-tab="${tab}"`}>${svg(ic)}<b>${tab}</b><small>${esc(sub)}</small></button>`;
+        return `<div class="tiles">${[
+          tile('Quests', 'quest', o.title), tile('Map', 'map', 'Chart, legend, set a course'), tile('Captain', 'person', `Rank ${s.level} ${RANKS[Math.min(RANKS.length - 1, s.level - 1)]}`),
+          tile('Gear', 'sword', SWORDS[s.sword].name), tile('Ship', 'ship', `${st.cls.name} · hull ${Math.round(s.ship.hp * 100)}%`), tile('Crew', 'crew', `${st.crew} boarders · ${s.hostages.length}/${st.brig} prisoners`),
+          tile('Pets', 'paw', s.pet ? PETS[s.pet].name : 'None with you'), tile('Factions', 'scales', isWanted(s) ? `Navy: ${standing(s.rep.navy)}` : 'Who trusts you', isWanted(s)), tile('Flags', 'flag', `Flying: ${FLAGS[s.flag]}`),
+          tile('Friends', 'friends', 'Comes with online play'), tile('Settings', 'gear', 'Sound, controls, restart'),
+        ].join('')}</div>`;
+      },
+      Quests() { const s = S(), o = game.quests.objective(); return `<h3>Story: ${esc(o.title)}</h3><p>${esc(o.text)}</p><p class="note">Next: ${esc(o.short)}</p><h3>Jobs (${s.jobs.length} of 3)</h3>${s.jobs.length ? s.jobs.map((j) => row(esc(j.title), esc(game.quests.shortText(j.obj) + game.quests.progress(j.obj, j.n)), `<span class="cost">${rewardText(j.reward)}</span>${btn('Drop', 'abandon', j.id, 'bad')}`)).join('') : '<p class="note">None taken. Tavern keepers in every port post work on their boards.</p>'}<p style="margin-top:12px">${btn('Open the chart', 'map', '', 'go')}</p>`; },
+      Captain() {
+        const s = S(), ps = playerStats(s), l = s.look, hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
         const sw = (key, opts) => `<div class="swatches">${Object.entries(opts).map(([k, c]) => `<button type="button" data-do="look" data-arg="${key}:${k}" class="${String(l[key]) === k ? 'on' : ''}" style="background:${hex(c)}" aria-label="${key} ${k}"></button>`).join('')}</div>`;
-        return `<h3>Coat</h3>${sw('coat', LOOK_OPTS.coat)}<h3>Sash</h3>${sw('sash', LOOK_OPTS.sash)}<h3>Skin</h3>${sw('skin', LOOK_OPTS.skin)}<h3>Hat</h3><div class="choices">${Object.entries(LOOK_OPTS.hat).map(([k, n]) => btn(n, 'look', `hat:${k}`, l.hat === k ? 'go' : '')).join('')}</div><p class="note" style="margin-top:12px">Sail colours are chosen at any shipwright.</p>`;
+        return `<div class="stat"><div><small>Rank ${s.level}</small><b>${RANKS[Math.min(RANKS.length - 1, s.level - 1)]}</b></div><div><small>Infamy</small><b>${s.xp} / ${xpFor(s.level)}</b></div><div><small>Health</small><b>${ps.maxHp}</b></div><div><small>Ships sunk</small><b>${s.stats.sunk}</b></div><div><small>Ships boarded</small><b>${s.stats.boarded}</b></div><div><small>Foes slain</small><b>${s.stats.kills}</b></div><div><small>Treasures dug</small><b>${s.stats.dug}</b></div></div>`
+          + `<h3>Coat</h3>${sw('coat', LOOK_OPTS.coat)}<h3>Sash</h3>${sw('sash', LOOK_OPTS.sash)}<h3>Skin</h3>${sw('skin', LOOK_OPTS.skin)}<h3>Hat</h3><div class="choices">${Object.entries(LOOK_OPTS.hat).map(([k, n]) => btn(n, 'look', `hat:${k}`, l.hat === k ? 'go' : '')).join('')}</div>`;
+      },
+      Gear() {
+        const s = S(), w = SWORDS[s.sword], g = GUNS[s.gun], nw = SWORDS[s.sword + 1], ng = GUNS[s.gun + 1];
+        return `<h3>Weapons</h3>${row(w.name, `Blade · ${w.dmg} damage a stroke${nw ? ` · next: ${nw.name} (${costText(nw)})` : ' · the finest there is'}`, '<span class="cost">In hand</span>')}${row(g.name, `Firearm · ${g.dmg} damage · ${g.reload.toFixed(1)}s reload${ng ? ` · next: ${ng.name} (${costText(ng)})` : ' · the finest there is'}`, '<span class="cost">In hand</span>')}<p class="note">Blacksmiths in every port forge better blades and sell firearms.</p>`
+          + `<h3>Carried</h3><div class="stat"><div><small>Rum</small><b>${s.rum}</b></div><div><small>Gold</small><b>${s.gold}</b></div><div><small>Timber</small><b>${s.timber}</b></div><div><small>Iron</small><b>${s.iron}</b></div></div>`
+          + `<h3>Treasure maps (${s.maps.length} of 3)</h3>${s.maps.length ? `<div class="maps">${s.maps.map((m, i) => `<figure><canvas class="chart" data-map="${i}" width="360" height="360"></canvas><figcaption>${ISLAND[m.island].name}. The X marks it; the anchor marks the landing.</figcaption></figure>`).join('')}</div>` : '<p class="note">None. Taverns sell them, and bottles drift at sea.</p>'}`;
+      },
+      Ship() {
+        const s = S(), st = shipStats(s), cargo = Object.keys(s.cargo).filter((g) => s.cargo[g]);
+        return `<div class="stat"><div><small>${st.cls.name}</small><b>Hull ${Math.round(s.ship.hp * st.maxHp)} / ${st.maxHp}</b></div><div><small>Speed</small><b>${(st.speed * 1.2).toFixed(1)} kn</b></div><div><small>Guns a side</small><b>${st.guns}</b></div><div><small>Hold</small><b>${cargoUsed(s)} / ${st.cargo}</b></div><div><small>Boarders</small><b>${st.crew}</b></div><div><small>Brig cells</small><b>${st.brig}</b></div></div>`
+          + `<h3>Shot</h3>${Object.entries(AMMO).map(([k, a]) => row(a.name, a.desc, k !== 'round' && !s.armory[k] ? '<span class="cost no">Not aboard</span>' : s.shot === k ? '<span class="cost">Loaded</span>' : btn('Load', 'shot', k, 'go'))).join('')}${row(SWIVEL.name, SWIVEL.desc, s.swivel ? '<span class="cost">Fitted</span>' : '<span class="cost no">Not fitted</span>')}`
+          + `<h3>Fittings</h3>${Object.entries(SHIP_UPGRADES).map(([k, u]) => row(`${u.name}${pips(s.ship.up[k], MAX_UPGRADE)}`, u.desc, '')).join('')}<p class="note">Shipwrights in every port sell shot, fittings, repairs and larger ships.</p>`
+          + `<h3>In the hold</h3><p>${cargo.length ? cargo.map((g) => `${s.cargo[g]} ${GOODS[g].name.toLowerCase()}`).join(', ') : 'Empty.'}${s.questCargo ? ` Plus ${s.questCargo} crates of job cargo.` : ''}</p>`;
+      },
+      Crew() {
+        const s = S(), st = shipStats(s);
+        return `<div class="stat"><div><small>Boarders</small><b>${st.crew}</b></div><div><small>From the ship</small><b>${st.cls.crew + Math.floor(s.ship.up.crew / 2)}</b></div><div><small>From crew quarters</small><b>${s.base.b.quarters || 0}</b></div><div><small>Brig</small><b>${s.hostages.length} / ${st.brig}</b></div></div><p>Boarders fight beside you when you take a ship. Fit crew berths at a shipwright or build Crew Quarters at your hideout for more.</p>`
+          + `<h3>Prisoners</h3>${s.hostages.length ? s.hostages.map((h) => row(`Captain of the ${esc(h.from)}`, 'Ransom him at any tavern. Some ports pay more, or pay in favour.', `<span class="cost">about ${h.value} gold</span>`)).join('') : `<p class="note">${st.brig ? 'The cells are empty. Board a ship, or accept a surrender and take a prisoner.' : 'No brig yet. A shipwright can fit cells (Refit, Brig cells) so you can take captains for ransom.'}</p>`}`;
       },
       Pets() {
         const s = S();
         return '<p>One companion sails with you at a time.</p>' + Object.entries(PETS).map(([k, d]) => row(d.name, s.pets[k] ? d.perk : `${d.perk} <i>${d.how}</i>`, !s.pets[k] ? '<span class="cost no">Not found yet</span>' : s.pet === k ? `<span class="cost">With you</span>${btn('Leave', 'takepet', '')}` : btn('Take along', 'takepet', k, 'go'))).join('');
       },
-      Log() { const s = S(), o = game.quests.objective(); return `<h3>${esc(o.title)}</h3><p>${esc(o.text)}</p><p class="note">${esc(o.short)}</p>${s.jobs.length ? `<h3>Jobs</h3>${s.jobs.map((j) => row(esc(j.title), esc(game.quests.shortText(j.obj) + game.quests.progress(j.obj, j.n)), `<span class="cost">${rewardText(j.reward)}</span>`)).join('')}` : '<p class="note">No jobs taken. Tavern keepers post work on their boards.</p>'}`; },
-      Chart() { return '<canvas class="chart" id="chartCv" width="720" height="720"></canvas>'; },
-      Maps() { const s = S(); return s.maps.length ? `<div class="maps">${s.maps.map((m, i) => `<figure><canvas class="chart" data-map="${i}" width="360" height="360"></canvas><figcaption>${ISLAND[m.island].name}. The X marks it; the anchor marks the landing.</figcaption></figure>`).join('')}</div>` : '<p class="note">You hold no treasure maps. Taverns sell them, and bottles drift at sea.</p>'; },
-      Captain() {
-        const s = S(), st = shipStats(s), ps = playerStats(s);
-        return `<div class="stat"><div><small>Rank ${s.level}</small><b>${RANKS[Math.min(RANKS.length - 1, s.level - 1)]}</b></div><div><small>Infamy</small><b>${s.xp} / ${xpFor(s.level)}</b></div><div><small>Health</small><b>${ps.maxHp}</b></div><div><small>Blade</small><b>${SWORDS[s.sword].name}</b></div><div><small>Firearm</small><b>${GUNS[s.gun].name}</b></div><div><small>Ship</small><b>${st.cls.name}</b></div><div><small>Ships sunk</small><b>${s.stats.sunk}</b></div><div><small>Ships boarded</small><b>${s.stats.boarded}</b></div><div><small>Foes slain</small><b>${s.stats.kills}</b></div><div><small>Treasures dug</small><b>${s.stats.dug}</b></div></div>`
-          + (Object.keys(s.cargo).some((g) => s.cargo[g]) ? `<h3>In the hold</h3><p>${Object.keys(s.cargo).filter((g) => s.cargo[g]).map((g) => `${s.cargo[g]} ${GOODS[g].name.toLowerCase()}`).join(', ')}</p>` : '');
+      Factions() {
+        const s = S(), b = bribeCost(s);
+        return '<p>At <b>Hostile</b> a faction attacks on sight and its port gives you no work. At <b>Hunted</b> the navy sends hunters that outgun you.</p>'
+          + Object.entries(FACTIONS).map(([k, f]) => `<div class="row col"><div><b>${f.name} · ${standing(s.rep[k])} (${s.rep[k]})</b><div class="meter"><i style="left:${(s.rep[k] + 100) / 2}%"></i></div><small>${f.blurb}</small></div></div>`).join('')
+          + (b > 0 ? `<p class="note">A tavern clerk will take ${b} gold to cool the navy down.</p>` : '');
       },
+      Flags() {
+        const s = S(), prev = (kind) => `<img class="flagPrev" alt="" src="${flagTexture(kind, s.jolly).image.toDataURL()}">`;
+        const fx = { pirate: 'Your true colours. 25% more infamy, and crews lose their nerve sooner. Everyone knows what you are.', merchant: 'The navy takes you for a trader and leaves you be, until you come close.', navy: 'Navy ships take you for one of their own, until you come close.', bloodwater: 'Bloodwater ships take you for one of the gang, until you come close.' };
+        return '<p>Fly false colours to slip past. Any ship that gets close may see through it, and firing your guns gives you away at once.</p>'
+          + Object.entries(FLAGS).map(([k, n]) => `<div class="row">${prev(k)}<div><b>${n}</b><small>${fx[k]}</small></div>${k !== 'pirate' && !s.flags[k] ? '<span class="cost no">Board one of their ships to take it</span>' : s.flag === k ? '<span class="cost">Flying</span>' : btn('Hoist', 'flag', k, 'go')}</div>`).join('')
+          + `<h3>Your colours</h3><div class="swatches">${Object.entries(JOLLY.field).map(([k, c]) => `<button type="button" data-do="jolly" data-arg="field:${k}" class="${s.jolly.field === k ? 'on' : ''}" style="background:${c}" aria-label="${k} field"></button>`).join('')}</div><div class="choices" style="margin-top:10px">${Object.entries(JOLLY.emblem).map(([k, n]) => btn(n, 'jolly', `emblem:${k}`, s.jolly.emblem === k ? 'go' : '')).join('')}</div>`;
+      },
+      Friends() { return '<p>Friends, crews and raiding other captains arrive with online play. That needs accounts and servers, which come after the solo game is deeper.</p><p class="note">Your captain, ship and hideout are saved on this device and will carry over when online play arrives.</p>'; },
       Settings(p) {
         return row('Sound', 'Cannon, steel and surf.', btn(S().muted ? 'Turn on' : 'Turn off', 'mute'))
           + row('Start over', 'Erases this voyage for good.', p.confirm ? `${btn('Yes, erase', 'wipe', '', 'bad')}${btn('Keep', 'nowipe')}` : btn('New voyage', 'askwipe', '', 'bad'))
-          + '<h3>Controls</h3><p><b>Touch:</b> left thumb steers the ship and moves on foot. Drag anywhere else to look. Flick the stick up or down to set sail.</p><p><b>Keys:</b> WASD move · Space fire or strike · Q block · Shift dodge · F shoot · R rum · E use · X / Z sails · M log.</p>';
+          + '<h3>Controls</h3><p><b>Touch:</b> left thumb steers the ship and moves on foot. Drag anywhere else to look. Flick the stick up or down to set sail. Tap the compass for the chart.</p><p><b>Keys:</b> WASD move · Space fire or strike · Q block · Shift dodge · F shoot · R rum · E use · X / Z sails · C change shot · V swivel gun · M menu · N chart.</p>';
+      },
+    },
+    prize: {
+      tabs: [],
+      main(p) {
+        const s = S(), sh = p.ship, room = s.hostages.length < shipStats(s).brig;
+        return `<p>The ${esc(sh.name)} has struck her colours. Her crew stand with their hands open.</p>`
+          + row('Take the cargo, spare the crew', 'Most of her cargo, a little infamy, and the least ill will. She sails away.', btn('Spare', 'prize', 'spare', 'go'))
+          + row('Take the cargo and her captain', room ? 'The same cargo, plus a prisoner to ransom. Her faction will resent it more.' : 'You have no free brig cell. Shipwrights fit them.', btn('Take him', 'prize', 'prisoner', '', !room))
+          + row('Sink her anyway', 'The most infamy, the least loot, and the worst reputation.', btn('Sink', 'prize', 'sink', 'bad'));
       },
     },
   };
+  // what a port will give for a prisoner
+  function ransomDeal(port, h) {
+    if (port === 'regal' && h.faction === 'pirate') return { label: 'Hand over', gold: Math.round(h.value * 0.6), rep: { navy: 18, guild: 5 }, text: 'The navy pays a bounty for Bloodwater captains and thinks better of you.' };
+    if (port === 'shoals' && h.faction === 'navy') return { label: 'Sell', gold: Math.round(h.value * 1.25), rep: { smug: 8, blood: 14, navy: -6 }, text: 'The smugglers pass navy officers to the Bloodwater for a fat price.' };
+    if (port === 'regal' && h.faction === 'navy') return { label: 'Return', gold: Math.round(h.value * 0.5), rep: { navy: 10 }, text: 'Hand the officer back. A small purse and some goodwill.' };
+    return { label: 'Ransom', gold: h.value, rep: {}, text: 'His friends will pay to have him back.' };
+  }
 
   const ACTIONS = {
     accept(i, p) { const err = game.quests.accept(p.isl.id, +i); if (err) ui.toast(err, 'warn'); else audio.good(); },
     abandon(id) { game.quests.abandon(id); },
     rum() { if (pay(S(), { gold: 30 })) { S().rum++; audio.coin(); } },
     chart() { const s = S(); if (pay(s, { gold: 220 })) { const isl = ISLANDS.filter((i) => i.kind !== 'hideout')[Math.floor(Math.random() * 8)]; s.maps.push({ island: isl.id, spot: Math.random() < 0.5 ? 0 : 1, tier: 2 }); audio.coin(); ui.toast(`The chart shows ${isl.name}. See Maps in your log.`, 'gold'); } },
-    bribe() { const s = S(); if (pay(s, { gold: Math.ceil(s.wanted * 1.5) })) { s.wanted = 0; audio.coin(); ui.toast('The clerk forgets your face.', 'gold'); } },
+    bribe() { const s = S(); if (pay(s, { gold: bribeCost(s) })) { s.rep.navy = -15; audio.coin(); ui.toast('The clerk loses some paperwork. The navy cools toward you.', 'gold'); } },
+    ransom(i, p) { const s = S(), h = s.hostages[+i], d = ransomDeal(p.isl.id, h); s.hostages.splice(+i, 1); s.gold += d.gold; for (const f in d.rep) addRep(s, f, d.rep[f]); audio.coin(); ui.toast(`${d.gold} gold for the captain of the ${h.from}.`, 'gold'); },
+    ammo(k) { const s = S(); if (pay(s, AMMO[k])) { s.armory[k] = true; s.shot = k; audio.good(); } },
+    swivel() { const s = S(); if (pay(s, SWIVEL)) { s.swivel = true; audio.good(); ui.toast('Swivel gun fitted. Drag to aim the ring, then tap SWIVEL.', 'gold'); } },
+    shot(k) { S().shot = k; audio.ui(); },
+    flag(k) { game.setFlag(k); audio.ui(); },
+    jolly(arg) { const [k, v] = arg.split(':'); S().jolly[k] = v; if (S().flag === 'pirate') game.setFlag('pirate'); audio.ui(); },
+    prize(how, p) { const sh = p.ship; ui.close(); game.prize(sh, how); },
+    map() { ui.close(); ui.map.open(); },
     repair() { const s = S(); if (pay(s, { gold: repairCost(s) })) { s.ship.hp = 1; game.sea.player.hp = game.sea.player.maxHp; audio.good(); } },
     upgrade(k) { const s = S(); if (s.ship.up[k] < MAX_UPGRADE && pay(s, upgradeCost(s, k))) { s.ship.up[k]++; game.sea.refreshStats(); audio.good(); } },
-    buyship(k) { const s = S(); if (pay(s, { gold: SHIP_CLASSES[k].price })) { s.owned[k] = { hull: 0, sails: 0, cannons: 0, hold: 0, crew: 0 }; ACTIONS.switch(k); } },
+    buyship(k) { const s = S(); if (pay(s, { gold: SHIP_CLASSES[k].price })) { s.owned[k] = freshUps(); ACTIONS.switch(k); } },
     switch(k) { const s = S(); s.ship.cls = k; s.ship.up = s.owned[k]; s.ship.hp = 1; game.swapShip(); audio.good(); ui.toast(`You take command of the ${SHIP_CLASSES[k].name}.`, 'gold'); },
     sail(k) { S().ship.sail = k; game.sea.player.model.sailMat.color.set(SAIL_COLORS[k]); audio.ui(); },
     sword(i) { const s = S(); if (pay(s, SWORDS[i])) { s.sword = +i; game.land.refreshGear(); audio.good(); } },
@@ -264,15 +338,19 @@ export function createUI(game) {
   ui.close = () => { if (!ui.panel) return; ui.panel = null; el.panel.hidden = true; game.paused = false; for (const k in input.pressed) input.pressed[k] = false; writeSave(S()); };
   ui.openTown = (isl, npc) => { game.emit('talk', { npc: npc.id }); ui.open(npc.kind, `${npc.name}`, `${npc.role}, ${isl.name}`, { isl }); };
   ui.openBuild = (id) => ui.open('build', BUILDINGS[id].name, "Rogue's Rest", { id });
-  ui.openMenu = (tab) => { ui.open('menu', "Captain's Log", ''); if (tab) { ui.panel.tab = tab; render(); } };
+  ui.openMenu = (tab) => { ui.open('menu', 'Menu', ''); if (tab) { ui.panel.tab = tab; render(); } };
+  ui.openPrize = (ship) => ui.open('prize', 'A prize', ship.name, { ship });
+  ui.map = createMap(game, $);
+  el.mini.addEventListener('click', () => { if (game.started && !game.paused) ui.map.open(); });
+  el.quest.addEventListener('click', () => { if (game.started && !game.paused) ui.openMenu('Quests'); });
+  window.addEventListener('keydown', (e) => { if (e.code === 'KeyN' && game.started) { if (ui.map.isOpen()) ui.map.close(); else if (!game.paused) ui.map.open(); } if (e.code === 'Escape' && ui.map.isOpen()) ui.map.close(); });
   el.panel.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t || !ui.panel) { if (e.target === el.panel) ui.close(); return; }
     if (t.id === 'panelClose') return ui.close();
     if (t.dataset.tab) { ui.panel.tab = t.dataset.tab; audio.ui(); sheet.body.scrollTop = 0; return render(); }
-    if (t.dataset.do) { const keep = sheet.body.scrollTop; ACTIONS[t.dataset.do](t.dataset.arg, ui.panel); if (ui.panel) { render(); sheet.body.scrollTop = keep; } }
+    if (t.dataset.do) { const keep = sheet.body.scrollTop; ACTIONS[t.dataset.do](t.dataset.arg || '', ui.panel); if (ui.panel) { render(); sheet.body.scrollTop = keep; } }
   });
   el.btnMenu.addEventListener('click', () => ui.openMenu());
-  el.btnMute.addEventListener('click', () => ACTIONS.mute());
   el.banner.addEventListener('click', () => { el.banner.hidden = true; });
   window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && ui.panel) ui.close(); });
 
