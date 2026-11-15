@@ -1,7 +1,7 @@
 // Everything afloat: the player's ship, AI ships, cannon fire, salvage, the Kraken.
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
-import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO } from './data.js';
+import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES } from './data.js';
 import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep } from './state.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
@@ -66,6 +66,8 @@ export function createSea(game) {
     if (count('pirate') < (lv >= 3 ? 4 : 3)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
     if (count('navy') < 2) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
     if (game.save.rep.navy <= -60 && !sea.ships.some((s) => s.alive && s.hunter)) { sea.hunterT = (sea.hunterT ?? 20) - 2.5; if (sea.hunterT <= 0) { const pos = openWater(sea.player.x, sea.player.z, 460, 680); if (pos && sea.spawn('hunter', pos)) { sea.hunterT = 100; game.toast('A navy hunter has your scent. She outguns you.', 'warn'); } } }
+    const bt = game.save.bounty;
+    if (bt && !sea.ships.some((s) => s.type === bt.id)) { const sh = sea.spawn(bt.id, openWater(bt.x, bt.z, 0, 140) || { x: bt.x, z: bt.z }); if (sh) { const k = 1 + 0.25 * (game.save.bountyDone[bt.id] || 0); sh.provoked = true; sh.maxHp = sh.hp = Math.round(sh.hp * k); sh.dmg *= 1 + 0.1 * (k - 1) * 4; sh.captain = BOUNTIES.find((b) => b.id === bt.id).captain; } }
     const z = ZONES.reach, bossReady = (id) => !game.save.bosses[id] || Date.now() - game.save.bosses[id] > 20 * 60000;
     if (bossReady('ghost') && !count('ghost') && dist2(sea.player.x, sea.player.z, z.x, z.z) < z.r + 150) { const pos = openWater(z.x, z.z, 0, z.r * 0.6); if (pos) { sea.spawn('ghost', pos); game.toast('A pale ship moves in the fog…', 'warn'); } }
     const m = ZONES.maw;
@@ -139,7 +141,7 @@ export function createSea(game) {
     ang += rand(-spread, spread);
     const el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) + rand(-0.006, 0.01) + (m.y > 2 ? -Math.atan2(m.y - 1.5, d) * 0.6 : 0);
     const dx = Math.sin(ang), dz = Math.cos(ang), ce = Math.cos(el);
-    if (sea.balls.length < MAX_BALLS) sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: sh, dmg: sh.isPlayer ? sh.stats.dmg : sh.dmg, life: 4, kind: q.kind || 'round' });
+    if (sea.balls.length < MAX_BALLS) sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: sh, dmg: sh.isPlayer ? sh.stats.dmg : sh.dmg * (1 - 0.13 * (game.save.mercy || 0)), life: 4, kind: q.kind || 'round' });
     fx.smoke(m.x + dx, m.y, m.z + dz, [dx, 0, dz], 7);
     const dc = dist2(m.x, m.z, game.camera.position.x, game.camera.position.z);
     audio.cannon(clamp(1.1 - dc / 420, 0.08, 1) * 0.6);
@@ -162,7 +164,7 @@ export function createSea(game) {
   sea.infamy = (base) => Math.round(base * (game.save.flag === 'pirate' ? 1.25 : 1));
   function checkSurrender(sh) {
     if (sh.surrendered || !sh.def || sh.def.boss || sh.hunter || sh.hp <= 0 || sh.frozen) return;
-    if (sh.hp < sh.maxHp * 0.6 && sh.morale <= 0) { sh.surrendered = true; sh.sail = 0; sh.burn = 0; sh.setFlag('white'); audio.good(); game.toast(`The ${sh.name} strikes her colours. Pull alongside to take the prize.`, 'gold'); }
+    if (sh.hp < sh.maxHp * 0.6 && sh.morale <= 0) { sh.surrendered = true; sh.sail = 0; sh.burn = 0; sh.setFlag('white'); game.emit('yield', {}); audio.good(); game.toast(`The ${sh.name} strikes her colours. Pull alongside to take the prize.`, 'gold'); }
   }
   function hook(sh) {
     if (sea.hookT > 0 || !sh.def) return; sea.hookT = 2;
@@ -326,7 +328,7 @@ export function createSea(game) {
         e.bolt -= dt;
         if (e.bolt <= 0 && k > 0.4) { e.bolt = rand(4, 9); game.ui.bolt(); audio.thunder(); game.shake(0.35); }
       }
-      if (e.t >= e.dur) { const rode = e.inside > 12; endEvent(); if (active && rode) game.reward({ xp: 45 }, 'You rode out the storm'); }
+      if (e.t >= e.dur) { const rode = e.inside > 12; endEvent(); if (active && rode) { game.reward({ xp: 45 }, 'You rode out the storm'); game.emit('storm', {}); } }
     } else if (e.type === 'siren') {
       const d = dist2(p.x, p.z, e.x, e.z);
       e.group.position.y = waveHeight(e.x, e.z, game.time) * 0.3;
@@ -349,6 +351,13 @@ export function createSea(game) {
     if (!sea.flick && Math.abs(y) > 0.82 && x < 0.5) { sea.flick = true; sea.setSail(y > 0 ? 1 : -1); }
     if (input.take('sailUp')) sea.setSail(1);
     if (input.take('sailDown')) sea.setSail(-1);
+    // trade winds: a quiet crossing at full sail gets faster, so long trips do not drag
+    const calm = p.sail >= 1 && !sea.kraken && game.world.weather < 0.2 && !sea.ships.some((s) => s.alive && (hostile(s) || s.provoked) && dist2(s.x, s.z, p.x, p.z) < 420);
+    sea.wind = damp(sea.wind || 0, calm ? 1 : 0, calm ? 0.3 : 2.5, dt); p.maxSpeed = p.stats.speed * (1 + 0.75 * sea.wind);
+    if (sea.wind > 0.6) { game.tip('wind', 'Open water and full sail: the trade winds carry you much faster. They drop when enemies are near.'); if (Math.random() < dt * 6) fx.emit(p.x + rand(-30, 30), rand(2, 9), p.z + rand(-30, 30), { color: 0xffffff, speed: 0, dir: [p.fx * 30, 0, p.fz * 30], life: 0.5, size: 0.28, alpha: 0.35, spread: 0 }); }
+    if (sea.target && sea.target.def && (hostile(sea.target) || sea.target.provoked)) game.tip('foe', 'Enemy ship. Turn so she sits off your side, then FIRE. Sink her for infamy, or wear her down and board for the whole cargo.', 12);
+    if (p.hp < p.maxHp * 0.45) game.tip('hull', 'Your hull is low. Run with full sail and repair at a shipwright. If you sink you keep your ship, but lose some gold and cargo.', 12);
+    if (cargoUsed(game.save) > 0) game.tip('cargo', 'You carry goods. Markets pay different prices: tap a port on the chart to see what sells dear there.', 12);
     if (sea.kraken && !sea.kraken.done) p.speed = Math.min(p.speed, 2.5);
     if (input.take('primary')) {
       const t = sea.target; let side;
@@ -473,6 +482,6 @@ export function createSea(game) {
     if (sea.bottleT <= 0) { sea.bottleT = rand(100, 170); if (game.save.maps.length < 2 && game.save.story.i > 2) { const pos = openWater(p.x + p.fx * 160, p.z + p.fz * 160, 0, 60); if (pos) { const isl = pick(ISLANDS.filter((i) => i.kind !== 'hideout')); addLoot(pos.x, pos.z, 'bottle', { map: { island: isl.id, spot: Math.random() < 0.5 ? 0 : 1, tier: 2 } }); } } }
   };
 
-  sea.fire = fire;
+  sea.fire = fire; sea.openWater = openWater;
   return sea;
 }

@@ -25,7 +25,7 @@ export function createFx(scene, fogColor) {
   const fx = {
     setScale(v) { mat.uniforms.uScale.value = v; },
     emit(x, y, z, o) {
-      const n = o.n || 1;
+      const n = fx.thin ? Math.max(1, Math.round((o.n || 1) * 0.5)) : o.n || 1;
       for (let i = 0; i < n; i++) {
         const k = head; head = (head + 1) % MAX;
         const sp = o.spread ?? 0.3;

@@ -8,7 +8,7 @@ import { createUI } from './ui.js';
 import { createQuests } from './quests.js';
 import { input, initInput } from './input.js';
 import { audio } from './audio.js';
-import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats } from './state.js';
+import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats, pending } from './state.js';
 import { setPlayerLook, staticFigure } from './character.js';
 import { ISLANDS, ISLAND, RANKS, FLAGS, RANSOM, FOG_N, WORLD_R } from './data.js';
 import { clamp, damp, rand, waveHeight, dist2 } from './util.js';
@@ -76,7 +76,7 @@ function takeColours(sh) {
 game.boardingWon = (enemy) => {
   const sea = game.sea;
   sea.takeLoot(sea.lootOf(enemy, 1.0), 'Plunder'); game.reward({ xp: sea.infamy(enemy.def.xp * 0.8) }, `${enemy.name} taken`); game.save.stats.boarded++;
-  sea.offend(enemy, 'board'); takeColours(enemy);
+  sea.offend(enemy, 'board'); takeColours(enemy); game.emit('board', {});
   if (game.capture(enemy)) game.toast('Their captain goes in irons in your brig. Ransom him at a tavern.', 'gold');
   setTimeout(() => fade(() => {
     game.land.leave(); game.mode = 'sea'; enemy.hp = 0; enemy.alive = false; if (sea.target === enemy) sea.target = null;
@@ -101,8 +101,11 @@ game.reveal = (x, z, r) => {
   const cx = Math.floor((x + WORLD_R) / cell), cz = Math.floor((z + WORLD_R) / cell);
   for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) { const gx = cx + i, gz = cz + j; if (gx < 0 || gz < 0 || gx >= FOG_N || gz >= FOG_N) continue; if (Math.hypot(i, j) * cell <= r + cell * 0.5) game.fog[gz * FOG_N + gx] = 1; }
 };
+// Losing twice in a row quietly softens enemy blows for a while, so a bad run does not become a wall.
+const mercy = () => { const s = game.save, before = Math.floor(s.mercy || 0); s.mercy = Math.min(3, (s.mercy || 0) + 1); if (Math.floor(s.mercy) > before && s.mercy >= 2) game.toast('The sea goes a little easier on you for now.', 'dim'); };
+game.tip = (id, text, secs = 10) => { const s = game.save; if (s.tips[id] || game.mode !== 'sea') return; s.tips[id] = true; game.ui.hint(text, secs); };
 game.playerFell = () => setTimeout(() => fade(() => {
-  const loss = deathTax(game.save);
+  mercy(); const loss = deathTax(game.save);
   if (game.mode === 'board') {
     const e = game.land.boarding.enemy, p = game.sea.player; game.land.leave(); game.mode = 'sea';
     p.hp = Math.max(10, p.hp - p.maxHp * 0.25); [p.x, p.z] = p.at(0, -120); e.provoked = true;
@@ -110,7 +113,7 @@ game.playerFell = () => setTimeout(() => fade(() => {
   } else { game.land.enter(game.land.isl); game.toast(`You wake on the beach, lighter by ${loss} gold.`, 'warn'); }
 }), 1700);
 game.playerSunk = () => setTimeout(() => fade(() => {
-  const s = game.save, loss = deathTax(s), home = ISLAND[s.home || 'saltmere'], sea = game.sea;
+  mercy(); const s = game.save, loss = deathTax(s), home = ISLAND[s.home || 'saltmere'], sea = game.sea;
   for (const g in s.cargo) s.cargo[g] = Math.floor(s.cargo[g] / 2);
   s.ship.hp = 0.6; s.pos = { x: home.anchor.x, z: home.anchor.z, h: home.anchor.heading };
   game.scene.remove(sea.player.group); sea.player = null; sea.makePlayer(); sea.target = null; game.cam.off = 0; game.land.dockPet(); if (sea.kraken) { for (const a of sea.kraken.arms) scene.remove(a.root); sea.kraken = null; } sea.startEvent && sea.event && sea.startEvent('none');
@@ -118,6 +121,7 @@ game.playerSunk = () => setTimeout(() => fade(() => {
 }), 2600);
 game.swapShip = () => { const sea = game.sea, isl = game.land.isl; sea.makePlayer(); const p = sea.player; if (isl) { p.x = isl.anchor.x; p.z = isl.anchor.z; p.heading = isl.anchor.heading; p.frozen = true; } if (!game.land.kind) game.land.dockPet(); };
 game.applyLook = () => { setPlayerLook(lookSpec(game.save)); game.land.refreshLook(); const helm = game.sea.player.group.userData.helm; if (helm) { const f = staticFigure('player'); helm.geometry.dispose(); helm.geometry = f.geometry; } };
+game.restore = (s) => { game.ui.close(); const sea = game.sea; if (game.mode !== 'sea') game.land.leave(); for (const sh of sea.ships) scene.remove(sh.group); sea.ships = []; for (const l of sea.loot) scene.remove(l.mesh); sea.loot = []; game.mode = 'sea'; begin(s); save(); game.toast('Voyage restored from your backup code.', 'gold'); };
 game.restart = () => { game.ui.close(); const sea = game.sea; if (game.mode !== 'sea') game.land.leave(); for (const s of sea.ships) scene.remove(s.group); sea.ships = []; for (const l of sea.loot) scene.remove(l.mesh); sea.loot = []; game.mode = 'sea'; begin(newSave()); game.started = false; game.hadSave = false; game.ui.showTitle(false); };
 
 function save() {
@@ -131,6 +135,7 @@ function begin(s) {
   game.fog.fill(0); for (let i = 0; i < s.fog.length && i < game.fog.length; i++) game.fog[i] = s.fog[i] === '1' ? 1 : 0;
   for (const id in s.seen) if (ISLAND[id]) game.reveal(ISLAND[id].x, ISLAND[id].z, ISLAND[id].r + 120);
   if (sea.player) { scene.remove(sea.player.group); sea.player = null; }
+  game.setGfx();
   sea.makePlayer(); game.land.refreshLook(); game.land.setPet(); refreshBase(game.world, s); game.quests.begin(); game.ui.dirty = true; game.ui.setMute(); game.cam.off = 0;
 }
 
@@ -161,6 +166,7 @@ function updateCamera(dt) {
 
 // ---------- sizing ----------
 let pr = Math.min(window.devicePixelRatio || 1, 2), slow = 0, fast = 0;
+game.setGfx = (v) => { if (v) game.save.gfx = v; const g = game.save.gfx; pr = g === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2); game.fx.thin = g === 'low'; slow = 0; resize(); };
 function resize() {
   const w = root.clientWidth || window.innerWidth, h = root.clientHeight || window.innerHeight;
   renderer.setPixelRatio(pr); renderer.setSize(w, h, false);
@@ -177,7 +183,7 @@ function frame(now) {
   const raw = Math.min(0.1, (now - last) / 1000); last = now;
   // drop resolution if the device is struggling
   if (raw > 0.03) { slow++; fast = 0; } else { fast++; if (fast > 240) slow = 0; }
-  if (slow > 45 && pr > 1) { pr = Math.max(1, pr - 0.25); slow = 0; resize(); }
+  if (slow > 45 && pr > 1 && game.save.gfx === 'auto') { pr = Math.max(1, pr - 0.25); slow = 0; resize(); }
   let dt = Math.min(0.05, raw);
   if (game.stop > 0) { game.stop -= raw; dt = 0; }
   const running = game.started && !game.paused && !busy;
@@ -210,6 +216,7 @@ function start(fresh) {
   if (fresh) begin(newSave());
   game.started = true; game.ui.hideTitle(); game.cam.off = 0; game.cam.pitch = 0.3;
   const o = game.quests.objective(); game.ui.banner(game.save.story.i ? 'Current chapter' : 'Chapter one', o.title, o.text);
+  if (!fresh && game.save.story.i > 0) game.ui.openWelcome(pending(game.save));
   if (!game.save.tipSea) { game.save.tipSea = true; game.sea.player.sail = 0; setTimeout(() => game.mode === 'sea' && game.ui.hint('Left thumb steers. Tap SAIL to raise canvas. FIRE shoots the broadside that faces your target. Sail close to any island and tap Go ashore.', 14), 6000); }
   if (dist2(game.sea.player.x, game.sea.player.z, ISLANDS[0].anchor.x, ISLANDS[0].anchor.z) < 30 && game.save.story.i === 0) game.sea.spawn('pirate', { x: ISLANDS[0].anchor.x + 60, z: ISLANDS[0].anchor.z - 330 });
   save();

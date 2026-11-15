@@ -113,7 +113,9 @@ export const STORY = [
   { title: 'King of the Key', text: 'Fishermen will not go near Crabclaw Key. Something huge nests there. Kill it.', obj: { type: 'boss', boss: 'crabking' }, mark: 'crab', reward: { gold: 600, xp: 380, iron: 40 } },
   { title: 'The Drowned Queen', text: 'A ghost frigate sails the fog of the Drowned Reach, far to the south. Send her down a second time.', obj: { type: 'boss', boss: 'ghost' }, mark: 'reach', reward: { gold: 1500, xp: 700 } },
   { title: 'What Sleeps Below', text: 'The charts mark deep water in the north-west as The Maw. Ships go in. Arms come up. End it.', obj: { type: 'boss', boss: 'kraken' }, mark: 'maw', reward: { gold: 3000, xp: 1200 } },
-  { title: 'Scourge of the Reach', text: 'The sea is yours, Captain. Take jobs, grow the cove, and keep your powder dry. More waters are coming.', obj: { type: 'none' }, reward: {} },
+  { title: 'Strike Your Colours', text: 'Fear is cheaper than powder. Break a crew\'s nerve until they haul down their flag: fire shot and your own black flag both help.', obj: { type: 'yield' }, reward: { gold: 500, xp: 300 } },
+  { title: 'A Name on a Poster', text: 'Every tavern keeps a bounty board of captains worse than you. Take a poster, hunt the name on it, and collect.', obj: { type: 'bounty' }, reward: { gold: 800, xp: 400 } },
+  { title: 'Scourge of the Reach', text: 'The sea is yours, Captain. Bounties grow harder each time they return, daily orders change every morning, and your deeds are still unwritten.', obj: { type: 'none' }, reward: {} },
 ];
 
 // Captain's appearance (cosmetic only) and companion animals.
@@ -149,3 +151,43 @@ export const FLAGS = { pirate: 'Your own colours', merchant: 'Merchant Guild', n
 export const JOLLY = { field: { black: '#141414', blood: '#7d1f1a', sea: '#1f4a4f', bone: '#d9cdb0' }, emblem: { skull: 'Skull and bones', swords: 'Crossed blades', hourglass: 'Hourglass', crown: 'Broken crown' } };
 export const RANSOM = { merchant: 150, pirate: 120, pirate2: 260, navy: 300, navy2: 520, hunter: 800 };
 export const FOG_N = 28;
+
+// ----- things that bring a captain back -----
+// Daily orders: three are drawn each real day.
+export const DAILY = [
+  { id: 'sink', evt: 'sink', n: [2, 3], text: (n) => `Sink, board or take ${n} ships` },
+  { id: 'board', evt: 'board', n: [1, 1], text: () => 'Win a boarding fight' },
+  { id: 'kill', evt: 'kill', n: [6, 10], text: (n) => `Defeat ${n} foes on foot` },
+  { id: 'dig', evt: 'dig', n: [1, 1], text: () => 'Dig up a buried treasure' },
+  { id: 'sell', evt: 'sell', n: [250, 500], step: 50, amount: true, text: (n) => `Sell ${n} gold worth of goods` },
+  { id: 'chest', evt: 'chest', n: [2, 2], text: (n) => `Open ${n} chests` },
+  { id: 'yield', evt: 'yield', n: [1, 1], text: () => 'Make a ship strike her colours' },
+];
+// Deeds: long goals with a reward each.
+const st = (k) => (s) => s.stats[k] || 0, built = (s) => Object.values(s.base.b).reduce((x, y) => x + y, 0);
+export const DEEDS = [
+  { id: 'sunk10', name: 'Powder Monkey', text: 'Sink 10 ships', stat: st('sunk'), goal: 10, reward: { gold: 300, xp: 100 } },
+  { id: 'sunk50', name: 'Terror of the Lanes', text: 'Sink 50 ships', stat: st('sunk'), goal: 50, reward: { gold: 2000, xp: 600 } },
+  { id: 'board5', name: 'Boarder', text: 'Win 5 boarding fights', stat: st('boarded'), goal: 5, reward: { gold: 400, xp: 150 } },
+  { id: 'board25', name: 'Deck Reaper', text: 'Win 25 boarding fights', stat: st('boarded'), goal: 25, reward: { gold: 2500, xp: 700 } },
+  { id: 'yield5', name: 'Feared Name', text: 'Make 5 ships strike their colours', stat: st('yields'), goal: 5, reward: { gold: 600, xp: 200 } },
+  { id: 'kills50', name: 'Blooded', text: 'Defeat 50 foes on foot', stat: st('kills'), goal: 50, reward: { gold: 400, xp: 150 } },
+  { id: 'kills250', name: "Butcher's Bill", text: 'Defeat 250 foes on foot', stat: st('kills'), goal: 250, reward: { gold: 2000, xp: 600 } },
+  { id: 'dug5', name: 'Gravedigger', text: 'Dig up 5 treasures', stat: st('dug'), goal: 5, reward: { gold: 500, xp: 200 } },
+  { id: 'seen', name: 'Chartmaker', text: 'Discover every island', stat: (s) => Object.keys(s.seen).length, goal: 9, reward: { gold: 600, xp: 300 } },
+  { id: 'base6', name: 'Landlord', text: 'Reach 6 building levels at your hideout', stat: built, goal: 6, reward: { gold: 500, timber: 60, iron: 40 } },
+  { id: 'base18', name: 'Pirate Haven', text: 'Fully build your hideout', stat: built, goal: 18, reward: { gold: 4000, xp: 1000 } },
+  { id: 'bounty3', name: 'Bounty Hunter', text: 'Collect 3 bounties', stat: st('bounties'), goal: 3, reward: { gold: 1500, xp: 500 } },
+  { id: 'storm3', name: 'Storm Rider', text: 'Ride out 3 storms', stat: st('storms'), goal: 3, reward: { gold: 400, xp: 200 } },
+  { id: 'ransom5', name: 'Ransomer', text: 'Ransom 5 captains', stat: st('ransomed'), goal: 5, reward: { gold: 800, xp: 250 } },
+  { id: 'rank10', name: 'Pirate Lord', text: 'Reach rank 10', stat: (s) => s.level, goal: 10, reward: { gold: 5000 } },
+];
+// Bounties: named captains, each stronger than the last, and stronger again every time they return.
+export const BOUNTIES = [
+  { id: 'b_meg', captain: 'Red Meg Harrow', ship: 'Wicked Tide', cls: 'sloop', hp: 200, guns: 4, dmg: 8, level: 2, gold: 500, crew: ['brigand', 'brigand', 'marksman', 'captain'] },
+  { id: 'b_crane', captain: 'Silas "Gallows" Crane', ship: "Hangman's Due", cls: 'brig', hp: 340, guns: 6, dmg: 9, level: 4, gold: 1100, crew: ['brigand', 'brigand', 'marksman', 'brute', 'captain'] },
+  { id: 'b_vane', captain: 'Mother Vane', ship: 'Black Psalm', cls: 'brig', hp: 460, guns: 7, dmg: 10, level: 6, gold: 1900, crew: ['brigand', 'brigand', 'marksman', 'marksman', 'brute', 'captain'] },
+  { id: 'b_ash', captain: 'Ashdown the Turncoat', ship: 'Iron Tithe', cls: 'frigate', hp: 640, guns: 9, dmg: 11, level: 8, gold: 3200, crew: ['soldier', 'soldier', 'brigand', 'marksman', 'marksman', 'brute', 'captain'] },
+  { id: 'b_nine', captain: 'Nine-Lives Okoro', ship: 'Last Laugh', cls: 'frigate', hp: 840, guns: 10, dmg: 12, level: 10, gold: 5000, crew: ['brigand', 'brigand', 'brigand', 'marksman', 'marksman', 'brute', 'brute', 'captain'] },
+];
+for (const b of BOUNTIES) { SEA_FOES[b.id] = { name: b.ship, cls: b.cls, faction: 'pirate', hp: b.hp, guns: b.guns, dmg: b.dmg, crew: b.crew, gold: [b.gold * 0.2, b.gold * 0.3], goods: 8, xp: Math.round(b.gold * 0.2), bounty: true }; RANSOM[b.id] = Math.round(b.gold * 0.4); }

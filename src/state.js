@@ -15,6 +15,7 @@ export function newSave() {
     ship: { cls: 'sloop', up: null, hp: 1, sail: 'bone' },
     owned: { sloop: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
+    daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,
     sword: 0, gun: 0,
     cargo: {}, questCargo: 0,
@@ -98,3 +99,7 @@ export const isWanted = (s) => s.rep.navy <= -20;
 export const standing = (v) => (v <= -60 ? 'Hunted' : v <= -20 ? 'Hostile' : v < 15 ? 'Wary' : v < 50 ? 'Friendly' : 'Trusted');
 export function addRep(s, f, d) { const before = s.rep[f]; s.rep[f] = Math.max(-100, Math.min(100, before + d)); return (before > -20 && s.rep[f] <= -20) || (before > -60 && s.rep[f] <= -60); }
 export const bribeCost = (s) => Math.max(0, Math.ceil((-15 - s.rep.navy) * 14));
+
+// Backup codes: the save as text, so it can be kept somewhere safe or moved to another device.
+export function exportSave(s) { try { return btoa(unescape(encodeURIComponent(JSON.stringify(s)))); } catch (e) { return ''; } }
+export function importSave(code) { try { const s = JSON.parse(decodeURIComponent(escape(atob(code.trim())))); return s && s.v === 1 && s.ship && s.stats ? fix(Object.assign(newSave(), s)) : null; } catch (e) { return null; } }

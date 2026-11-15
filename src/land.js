@@ -188,6 +188,7 @@ export function createLand(game) {
   }
   function hurtPlayer(dmg, from, heavy) {
     const p = land.player; if (!p.alive) return;
+    dmg *= 1 - 0.13 * (game.save.mercy || 0);
     p.hp -= dmg; p.combat = 6; game.ui.flash(); game.shake(heavy ? 0.8 : 0.4); audio.hit(1);
     const c = chest(p); fx.blood(c.x, c.y, c.z, 8);
     if (from) { const d = dist2(p.x, p.z, from.x, from.z) || 1, k = heavy ? 9 : 3; p.kx = ((p.x - from.x) / d) * k; p.kz = ((p.z - from.z) / d) * k; }
@@ -371,7 +372,7 @@ export function createLand(game) {
     return r;
   }
   function openChest(ch) {
-    ch.open = true; const s = game.save; audio.good(); fx.sparks(ch.c.x, heightAt(ch.c.x, ch.c.z) + 0.8, ch.c.z, 16, 0xffd978);
+    ch.open = true; const s = game.save; game.emit('chest', {}); audio.good(); fx.sparks(ch.c.x, heightAt(ch.c.x, ch.c.z) + 0.8, ch.c.z, 16, 0xffd978);
     if (ch.c.vault) { s.raidAt = Date.now(); game.reward({ gold: Math.round(rand(700, 950) * (1 + s.level * 0.08)), iron: 60, timber: 60, xp: 150 }, "Bloodwater's vault is yours"); game.emit('raid', { island: land.isl.id }); }
     else { s.chests[ch.c.id] = true; if (ch.c.id === 'bones:idol' && !s.pets.parrot) { s.pets.parrot = true; if (!s.pet) { s.pet = 'parrot'; land.setPet(); } game.ui.banner('New companion', PETS.parrot.name, 'A scarlet bird drops from the idol onto your shoulder. ' + PETS.parrot.perk); } const r = chestLoot(ch.c.tier); game.reward(r, r.rum ? 'Chest opened (and a bottle of rum)' : 'Chest opened'); }
   }

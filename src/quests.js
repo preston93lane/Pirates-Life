@@ -1,5 +1,5 @@
 // Story chain and tavern jobs. Both are driven by events the rest of the game emits.
-import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION } from './data.js';
+import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION, DAILY, DEEDS, BOUNTIES } from './data.js';
 import { cargoUsed, shipStats, addRep } from './state.js';
 import { pick, rand, dist2 } from './util.js';
 
@@ -20,6 +20,8 @@ export function createQuests(game) {
       case 'raid': return evt === 'raid';
       case 'boss': return evt === 'boss' && d.boss === obj.boss;
       case 'deliver': if (evt === 'talk' && d.npc === `${obj.to}:tavern` && S().questCargo >= obj.n) { S().questCargo -= obj.n; return true; } return false;
+      case 'yield': return evt === 'yield';
+      case 'bounty': return evt === 'bounty';
       default: return false;
     }
   }
@@ -30,6 +32,32 @@ export function createQuests(game) {
     if (step.give.quest) S().questCargo += step.give.quest;
     st.given = true;
   };
+  const told = {};
+  const dayKey = (ms) => { const t = new Date(ms); return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`; };
+  // Three orders a day, and a streak for coming back on consecutive days.
+  q.daily = () => {
+    const s = S(), t = dayKey(Date.now());
+    if (!s.daily || s.daily.day !== t) {
+      const streak = s.daily && s.daily.day === dayKey(Date.now() - 864e5) ? (s.daily.streak || 0) + 1 : 1;
+      const pool = DAILY.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+      s.daily = { day: t, streak, login: false, bonus: false, tasks: pool.map((d) => ({ id: d.id, goal: Math.round(rand(d.n[0], d.n[1]) / (d.step || 1)) * (d.step || 1), n: 0, claimed: false })) };
+    }
+    return s.daily;
+  };
+  q.dailyText = (t) => DAILY.find((x) => x.id === t.id).text(t.goal);
+  q.dailyReward = () => ({ gold: 100 + 35 * S().level, xp: 50 + 10 * S().level });
+  q.bonusReward = () => ({ gold: 250 + 60 * S().level, iron: 20, timber: 20, rum: 1 });
+  q.loginReward = () => { const k = q.daily().streak; return { gold: 40 * Math.min(k, 7) + (k % 7 === 0 ? 300 : 0) }; };
+  q.claimDaily = (i) => { const t = q.daily().tasks[i]; if (t.n >= t.goal && !t.claimed) { t.claimed = true; game.reward(q.dailyReward(), 'Order complete'); } };
+  q.claimBonus = () => { const d = q.daily(); if (!d.bonus && d.tasks.every((t) => t.claimed)) { d.bonus = true; game.reward(q.bonusReward(), "All of today's orders done"); } };
+  q.claimLogin = () => { const d = q.daily(); if (!d.login) { d.login = true; game.reward(q.loginReward(), `Day ${d.streak} at sea`); } };
+  q.claimDeed = (id) => { const s = S(), d = DEEDS.find((x) => x.id === id); if (d && !s.deeds[id] && d.stat(s) >= d.goal) { s.deeds[id] = true; game.reward(d.reward, `Deed: ${d.name}`); } };
+  q.pendingClaims = () => { const s = S(), d = q.daily(); return d.tasks.filter((t) => t.n >= t.goal && !t.claimed).length + (d.login ? 0 : 1) + DEEDS.filter((x) => !s.deeds[x.id] && x.stat(s) >= x.goal).length; };
+  q.takeBounty = (id, port) => {
+    const s = S(), isl = ISLAND[port], pos = game.sea.openWater(isl.x, isl.z, isl.r + 380, isl.r + 700);
+    if (!pos) return 'No word of her today. Try again.';
+    s.bounty = { id, x: pos.x, z: pos.z }; return null;
+  };
   q.on = (evt, d) => {
     const s = S(), step = q.step();
     if (step.obj.type !== 'none' && matches(step.obj, evt, d, s.story)) {
@@ -37,6 +65,19 @@ export function createQuests(game) {
       s.story.i++; s.story.n = 0; s.story.given = false; q.begin();
       game.ui.banner('New chapter', q.step().title, q.step().text);
     }
+    // daily orders
+    for (const t of q.daily().tasks) { const def = DAILY.find((x) => x.id === t.id); if (def.evt === evt && t.n < t.goal) { t.n = Math.min(t.goal, t.n + (def.amount ? d.gold || 0 : 1)); if (t.n >= t.goal) game.toast('Daily order done. Claim it in Menu, Orders.', 'gold'); } }
+    // running tallies for deeds
+    const tally = { yield: 'yields', storm: 'storms', ransom: 'ransomed' }[evt]; if (tally) s.stats[tally] = (s.stats[tally] || 0) + 1;
+    if (evt === 'sink') s.mercy = Math.max(0, (s.mercy || 0) - 0.34);
+    // bounty collected?
+    if (evt === 'sink' && s.bounty && d.type === s.bounty.id) {
+      const b = BOUNTIES.find((x) => x.id === s.bounty.id), times = s.bountyDone[b.id] || 0;
+      s.bountyDone[b.id] = times + 1; s.bounty = null; s.stats.bounties = (s.stats.bounties || 0) + 1;
+      game.reward({ gold: Math.round(b.gold * (1 + 0.25 * times)), xp: Math.round(b.gold * 0.3) }, `Bounty collected: ${b.captain}`); game.ui.banner('Bounty collected', b.captain, 'The poster comes down. A harder name will take its place.');
+      q.on('bounty', {});
+    }
+    for (const d2 of DEEDS) if (!s.deeds[d2.id] && !told[d2.id] && d2.stat(s) >= d2.goal) { told[d2.id] = true; game.toast(`Deed done: ${d2.name}. Claim it in Menu, Deeds.`, 'gold'); }
     for (const job of s.jobs.slice()) if (matches(job.obj, evt, d, job)) { s.jobs.splice(s.jobs.indexOf(job), 1); game.reward(job.reward, `Job done: ${job.title}`); for (const f in job.rep || {}) addRep(s, f, job.rep[f]); }
     game.ui.dirty = true;
   };
@@ -53,6 +94,8 @@ export function createQuests(game) {
       case 'kill': return `Slay ${o.n} ${FOES[o.foe].name}${o.island ? ` on ${ISLAND[o.island].name}` : ''}`;
       case 'raid': return 'Break open the vault at Bloodwater Hold';
       case 'boss': return { crabking: 'Kill the Crab King on Crabclaw Key', ghost: 'Sink the Drowned Queen in the Drowned Reach', kraken: 'Destroy the Kraken in The Maw' }[o.boss];
+      case 'yield': return 'Make a ship strike her colours';
+      case 'bounty': return 'Take a bounty poster at a tavern and collect on it';
       default: return 'Sail where you please';
     }
   }
@@ -63,6 +106,7 @@ export function createQuests(game) {
     const st = q.step(), o = st.obj, p = game.sea.player;
     if (o.type === 'sink') { let best = null, bd = 1e9; for (const sh of game.sea.ships) if (sh.alive && sh.faction === o.faction) { const d = dist2(p.x, p.z, sh.x, sh.z); if (d < bd) { bd = d; best = sh; } } if (best) return { x: best.x, z: best.z, name: best.name }; }
     if (S().course) return S().course;
+    if (S().bounty) { const b = S().bounty, sh = game.sea.ships.find((x) => x.alive && x.type === b.id); return sh ? { x: sh.x, z: sh.z, name: sh.name } : { x: b.x, z: b.z, name: 'Bounty last seen here' }; }
     const id = st.mark || (S().jobs[0] && S().jobs[0].mark);
     if (!id) return null;
     if (ZONES[id]) return { x: ZONES[id].x, z: ZONES[id].z, name: ZONES[id].name };

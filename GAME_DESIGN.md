@@ -351,3 +351,21 @@ they exist.
 Decisions I will ask you for at that point: which regions to launch in first,
 whether accounts are required or optional (guest play converts better), and
 how PvP losses should feel (how much loot a raid can take).
+
+---
+
+## 11. Why players might not come back, and what the game does about it
+
+| Risk | What it looks like | Built in now | Still to do |
+|---|---|---|---|
+| Content runs out | Story ends, nothing left to chase | Bounty board of named captains that return stronger each time; daily orders; 15 deeds; two more story chapters | New regions, seasonal story arcs, world events |
+| No reason to open it today | Player drifts away after a week | Three daily orders, a day streak with a growing share, hideout production while away, a welcome-back screen that says where you left off | Push notifications (needs the store app), weekly orders |
+| Lost in the first five minutes | Does not know what to do or how | One-time tips that fire at the right moment, a Help page, the compass marker, a visible menu | A hand-held first voyage; a short intro scene |
+| Losing feels unfair | Sunk twice, quits | Losing only costs some gold and cargo; after repeat losses enemies quietly hit softer for a while | Difficulty choice; clearer threat rating on each enemy |
+| Long, empty sailing | Crossing the map is dull | Trade winds: +75% speed at full sail on quiet water; sea events; course marker | Fast travel between visited ports; more things to find mid-crossing |
+| Runs badly on a weak phone | Stutter, heat, battery | Auto resolution drop, a Low/Auto/High graphics setting, single file with no downloads | Level-of-detail for far islands, 30 fps battery mode |
+| Progress wiped | Browser clears storage, weeks lost | Backup code: copy it out, paste it back, or move to another device | Cloud saves with accounts (phase 0.3) |
+| Grind wall | Next upgrade feels too far | Deeds and dailies pay gold and materials; bounties pay big | Tune prices from real play data |
+| Combat gets samey | Same three enemies | Shot types, surrender, flags and factions change how each fight goes | More enemy ship behaviours, sword skills, mini-bosses |
+| No sound identity | Feels flat without music | Synthesised effects | Music and voice barks |
+| Nothing to show off | No reason to tell a friend | Custom captain, sails and flag | Share-clip button, friends and raids (online phases) |
