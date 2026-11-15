@@ -328,10 +328,12 @@ export function createUI(game) {
     const p = ui.panel; if (!p) return;
     const view = VIEWS[p.kind];
     sheet.h2.innerHTML = `${esc(p.title)}${p.sub ? `<small>${esc(p.sub)}</small>` : ''}`;
+    $('panelBack').hidden = !(p.kind === 'menu' && p.tab !== 'Menu');
     sheet.nav.innerHTML = view.tabs.map((t) => `<button type="button" data-tab="${t}" class="${t === p.tab ? 'on' : ''}">${t}</button>`).join('');
     sheet.body.innerHTML = (view[p.tab] || view.main)(p);
     const cv = sheet.body.querySelector('#chartCv'); if (cv) drawChart(cv);
     for (const m of sheet.body.querySelectorAll('[data-map]')) drawTreasureMap(m, S().maps[+m.dataset.map]);
+    const on = sheet.nav.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
     ui.dirty = true;
   }
   ui.open = (kind, title, sub, extra = {}) => { ui.panel = Object.assign({ kind, title, sub, tab: VIEWS[kind].tabs[0] || 'main' }, extra); el.panel.hidden = false; game.paused = true; for (const k in input.pressed) input.pressed[k] = false; input.move.x = input.move.y = 0; audio.ui(); render(); sheet.body.scrollTop = 0; };
@@ -347,6 +349,7 @@ export function createUI(game) {
   el.panel.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t || !ui.panel) { if (e.target === el.panel) ui.close(); return; }
     if (t.id === 'panelClose') return ui.close();
+    if (t.id === 'panelBack') { ui.panel.tab = 'Menu'; audio.ui(); sheet.body.scrollTop = 0; return render(); }
     if (t.dataset.tab) { ui.panel.tab = t.dataset.tab; audio.ui(); sheet.body.scrollTop = 0; return render(); }
     if (t.dataset.do) { const keep = sheet.body.scrollTop; ACTIONS[t.dataset.do](t.dataset.arg || '', ui.panel); if (ui.panel) { render(); sheet.body.scrollTop = keep; } }
   });

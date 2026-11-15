@@ -219,3 +219,21 @@ table.goods .btn { min-width: 48px; padding: 8px; }
 .tr { display: grid; grid-template-columns: auto auto; grid-template-areas: "menu mini" ". place"; align-items: start; justify-items: end; gap: 5px 8px; }
 #mini { grid-area: mini; } #place { grid-area: place; } #btnMenu { grid-area: menu; }
 @media (max-aspect-ratio: 1/1) { .tr { grid-template-columns: auto; grid-template-areas: "mini" "place" "menu"; } }
+
+/* ----- menus: tabs never squash, and the sheet fills short phone screens ----- */
+.sheet header, .sheet nav { flex: none; }
+.sheet .body { flex: 1 1 auto; min-height: 0; }
+.sheet h2 { flex: 1; min-width: 0; }
+#panelBack { flex: none; min-height: 40px; padding: 8px 12px; border: 1px solid var(--brass); border-radius: 4px; background: #5d4a22; color: #fff; font: 600 13px/1 var(--ui); }
+.sheet nav { gap: 6px; padding: 8px 10px; scrollbar-width: none; }
+.sheet nav::-webkit-scrollbar { display: none; }
+.sheet nav button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--seam); border-radius: 20px; background: var(--leather-2); color: var(--bone); font-size: 15px; }
+.sheet nav button.on { background: var(--brass); border-color: var(--brass); color: #14100a; }
+@media (max-height: 520px) {
+  #panel { padding: 0; }
+  .sheet { width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; }
+  .sheet header { padding: 6px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); }
+  .sheet h2 { font-size: 18px; }
+  .sheet nav { padding: 6px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); }
+  .sheet .body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
