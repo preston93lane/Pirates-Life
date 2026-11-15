@@ -41,7 +41,7 @@ export function initInput(layer, stickEl, knobEl) {
     b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
   }
 
-  const KEYMAP = { Space: 'primary', KeyJ: 'primary', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyK: 'dodge', KeyQ: 'block', KeyL: 'block', KeyF: 'shoot', KeyE: 'ctx', KeyR: 'rum', KeyX: 'sailUp', KeyZ: 'sailDown', KeyM: 'menu', KeyC: 'ammo', KeyV: 'swivel' };
+  const KEYMAP = { Space: 'primary', KeyJ: 'primary', ShiftLeft: 'dodge', ShiftRight: 'dodge', KeyK: 'dodge', KeyQ: 'block', KeyL: 'block', KeyF: 'shoot', KeyE: 'ctx', KeyR: 'rum', KeyX: 'sailUp', KeyZ: 'sailDown', KeyM: 'menu', KeyC: 'ammo', KeyV: 'swivel', KeyT: 'skill', KeyG: 'bomb' };
   const axis = () => {
     if (stickId !== null) return;
     const x = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0), y = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0), d = Math.hypot(x, y) || 1;

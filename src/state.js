@@ -12,10 +12,10 @@ function fix(s) { // keep older saves working as the game grows
 export function newSave() {
   return fix({
     v: 1, gold: 120, timber: 0, iron: 0, rum: 2, xp: 0, level: 1,
-    ship: { cls: 'sloop', up: null, hp: 1, sail: 'bone' },
-    owned: { sloop: freshUps() },
+    ship: { cls: 'cutter', up: null, hp: 1, sail: 'bone' },
+    owned: { cutter: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
-    daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
+    bombs: 2, bless: 0, caves: {}, music: true, daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,
     sword: 0, gun: 0,
     cargo: {}, questCargo: 0,
@@ -49,7 +49,7 @@ export function shipStats(s) {
   };
 }
 export function playerStats(s) {
-  return { maxHp: 100 + (s.level - 1) * 8, sword: SWORDS[s.sword].dmg, gun: GUNS[s.gun].dmg, gunReload: GUNS[s.gun].reload };
+  return { maxHp: 100 + (s.level - 1) * 8, sword: SWORDS[s.sword].dmg * (s.bless > Date.now() ? 1.25 : 1), gun: GUNS[s.gun].dmg, gunReload: GUNS[s.gun].reload };
 }
 export const rankName = (s) => RANKS[Math.min(RANKS.length - 1, Math.floor((s.level - 1) / 1))] || RANKS[RANKS.length - 1];
 export const cargoUsed = (s) => Object.values(s.cargo).reduce((a, b) => a + b, 0) + s.questCargo;

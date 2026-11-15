@@ -38,7 +38,7 @@ export function createMap(game, $) {
   let W = 0, H = 0, dpr = 1;
   const S = () => game.save, X = (x) => W / 2 - (x - m.cx) * m.k, Y = (z) => H / 2 - (z - m.cz) * m.k;
   const revealed = (x, z) => { const n = FOG_N, i = Math.floor(((x + WORLD_R) / (WORLD_R * 2)) * n), j = Math.floor(((z + WORLD_R) / (WORLD_R * 2)) * n); return i >= 0 && j >= 0 && i < n && j < n && game.fog[j * n + i] === 1; };
-  const me = () => (game.mode === 'land' ? game.land.player : game.sea.player);
+  const me = () => (game.mode === 'land' && !game.land.cave ? game.land.player : game.sea.player);
 
   legend.innerHTML = LEGEND.map(([t, label]) => `<div><canvas width="52" height="52" data-ic="${t}"></canvas><span>${label}</span></div>`).join('');
   for (const lc of legend.querySelectorAll('canvas')) { const x = lc.getContext('2d'); icon(x, lc.dataset.ic, 26, 26, 1.7); }
@@ -108,13 +108,17 @@ export function createMap(game, $) {
     else if (ic.ship) { const sh = ic.ship; title = sh.name; sub = `${ic.type === 'hostile' ? 'Hostile' : 'Not hostile'} · ${where}`; body = `<p>Hull ${Math.round((sh.hp / sh.maxHp) * 100)}% · ${sh.def.guns} guns a side · crew of ${sh.crew.length}${sh.surrendered ? ' · has struck her colours' : ''}</p><p>Sink her for infamy, or board her for the whole cargo.</p>`; course = { x: sh.x, z: sh.z, name: sh.name }; }
     else if (ic.quest) { const o = game.quests.objective(); title = o.title; sub = `Objective · ${where}`; body = `<p>${o.short}</p>`; }
     else if (ic.course) { title = `Course: ${ic.course.name}`; sub = where; body = '<p>Your compass marker points here.</p>'; }
-    info.innerHTML = `<b>${title}</b><small>${sub}</small>${body}<div class="mapBtns">${course ? '<button type="button" class="btn go" data-course="set">Set course</button>' : ''}${s.course ? '<button type="button" class="btn" data-course="clear">Clear course</button>' : ''}<button type="button" class="btn" data-course="close">Close</button></div>`;
+    const atSea = game.mode === 'sea' || game.mode === 'deck', far = d > 150;
+    const fast = ic.isl && (ic.isl.kind === 'town' || ic.isl.kind === 'hideout') && far ? Math.round(d * 0.12) + 20 : 0; info._isl = ic.isl; info._fast = fast;
+    info.innerHTML = `<b>${title}</b><small>${sub}</small>${body}<div class="mapBtns">${course ? '<button type="button" class="btn go" data-course="set">Set course</button>' : ''}${course && atSea && far ? '<button type="button" class="btn" data-course="mate">Mate, sail us there</button>' : ''}${fast ? `<button type="button" class="btn" data-course="fast">Fast travel (${fast} gold)</button>` : ''}${s.course ? '<button type="button" class="btn" data-course="clear">Clear course</button>' : ''}<button type="button" class="btn" data-course="close">Close</button></div>`;
     info.hidden = false; info._course = course;
   }
   info.addEventListener('click', (e) => {
     const b = e.target.closest('[data-course]'); if (!b) return;
     if (b.dataset.course === 'set') { S().course = info._course; game.toast(`Course set for ${info._course.name}. Follow the marker on your compass.`, 'gold'); }
-    if (b.dataset.course === 'clear') S().course = null;
+    if (b.dataset.course === 'clear') { S().course = null; game.sea.setMate(null); }
+    if (b.dataset.course === 'mate') { S().course = info._course; m.close(); game.sea.setMate(info._course); return; }
+    if (b.dataset.course === 'fast') { m.close(); game.fastTravel(info._isl, info._fast); return; }
     info.hidden = true; m.sel = null; draw();
   });
 

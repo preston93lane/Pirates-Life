@@ -4,15 +4,15 @@ export const WORLD_R = 1450;
 
 // kind: town | hideout | fort | ruins | crab | islet.   land: compass angle (radians) of the landing beach.
 export const ISLANDS = [
-  { id: 'saltmere', name: 'Saltmere', x: 0, z: 0, r: 190, h: 26, seed: 11, kind: 'town', land: 2.5, blurb: 'Free port. Every service a captain needs.' },
-  { id: 'rest', name: "Rogue's Rest", x: -520, z: 400, r: 135, h: 20, seed: 23, kind: 'hideout', land: 0.9, blurb: 'Your hidden cove.' },
+  { cave: true, id: 'saltmere', name: 'Saltmere', x: 0, z: 0, r: 190, h: 26, seed: 11, kind: 'town', land: 2.5, blurb: 'Free port. Every service a captain needs.' },
+  { jungle: true, id: 'rest', name: "Rogue's Rest", x: -520, z: 400, r: 135, h: 20, seed: 23, kind: 'hideout', land: 0.9, blurb: 'Your hidden cove.' },
   { id: 'gull', name: 'Gull Rock', x: 340, z: 350, r: 72, h: 12, seed: 37, kind: 'islet', land: 4.0, blurb: 'A bare islet. Good for burying things.' },
-  { id: 'regal', name: 'Port Regal', x: 840, z: -420, r: 205, h: 30, seed: 41, kind: 'town', land: 3.6, blurb: 'Navy trade port. Pays well for luxuries.' },
+  { cave: true, jungle: true, id: 'regal', name: 'Port Regal', x: 840, z: -420, r: 205, h: 30, seed: 41, kind: 'town', land: 3.6, blurb: 'Navy trade port. Pays well for luxuries.' },
   { id: 'shoals', name: 'Black Shoals', x: -780, z: -560, r: 160, h: 22, seed: 53, kind: 'town', land: 0.4, blurb: "Smugglers' den. No questions asked." },
-  { id: 'bones', name: 'Isle of Bones', x: 250, z: -830, r: 195, h: 34, seed: 67, kind: 'ruins', land: 1.3, blurb: 'Old ruins. The dead here do not rest.' },
-  { id: 'crab', name: 'Crabclaw Key', x: -230, z: 900, r: 150, h: 14, seed: 71, kind: 'crab', land: 5.2, blurb: 'Crab nests, and something bigger.' },
-  { id: 'blood', name: 'Bloodwater Hold', x: 780, z: 640, r: 150, h: 18, seed: 83, kind: 'fort', land: 3.9, blurb: 'Fort of the Bloodwater gang. Their vault is full.' },
-  { id: 'tooth', name: "Widow's Tooth", x: -1020, z: 170, r: 66, h: 16, seed: 97, kind: 'islet', land: 0.2, blurb: 'A lonely spike of rock.' },
+  { cave: true, jungle: true, id: 'bones', name: 'Isle of Bones', x: 250, z: -830, r: 195, h: 34, seed: 67, kind: 'ruins', land: 1.3, blurb: 'Old ruins. The dead here do not rest.' },
+  { cave: true, id: 'crab', name: 'Crabclaw Key', x: -230, z: 900, r: 150, h: 14, seed: 71, kind: 'crab', land: 5.2, blurb: 'Crab nests, and something bigger.' },
+  { cave: true, id: 'blood', name: 'Bloodwater Hold', x: 780, z: 640, r: 150, h: 18, seed: 83, kind: 'fort', land: 3.9, blurb: 'Fort of the Bloodwater gang. Their vault is full.' },
+  { cave: true, id: 'tooth', name: "Widow's Tooth", x: -1020, z: 170, r: 66, h: 16, seed: 97, kind: 'islet', land: 0.2, blurb: 'A lonely spike of rock.' },
 ];
 export const ISLAND = Object.fromEntries(ISLANDS.map((i) => [i.id, i]));
 
@@ -21,10 +21,21 @@ export const ZONES = {
   maw: { name: 'The Maw', x: 1130, z: 1010, r: 200 },
 };
 
+// Twelve hulls. Upgrades are a percentage of these numbers, so a small ship never catches a big one.
+// rig: square | gaff | lateen. fat = full cargo hull. sharp = fine fast bow. castle / fore = stern and bow castles.
 export const SHIP_CLASSES = {
-  sloop: { name: 'Sloop', len: 23, beam: 7.2, masts: 1, guns: 3, hp: 110, speed: 15.5, turn: 0.62, cargo: 20, crew: 2, price: 0, level: 1 },
-  brig: { name: 'Brig', len: 31, beam: 8.8, masts: 2, guns: 5, hp: 210, speed: 14, turn: 0.5, cargo: 40, crew: 3, price: 2400, level: 4 },
-  frigate: { name: 'Frigate', len: 40, beam: 10.4, masts: 3, guns: 8, hp: 360, speed: 13, turn: 0.42, cargo: 64, crew: 4, price: 8500, level: 8 },
+  cutter: { name: 'Cutter', role: 'Starter', len: 17, beam: 5.4, masts: 1, rig: 'gaff', castle: 0.7, guns: 2, hp: 90, speed: 15, turn: 0.7, cargo: 14, crew: 1, price: 0, level: 1, hullC: 0x4d3c29, trimC: 0x6f5a3c },
+  sloop: { name: 'Sloop', role: 'Fast', len: 21, beam: 6.4, masts: 1, guns: 3, hp: 125, speed: 17, turn: 0.64, cargo: 18, crew: 2, price: 900, level: 2, hullC: 0x40301f, trimC: 0x9a772f },
+  fluyt: { name: 'Fluyt', role: 'Cargo', len: 25, beam: 9, fat: 1, masts: 2, castle: 2, guns: 3, hp: 180, speed: 12.5, turn: 0.46, cargo: 56, crew: 2, price: 1700, level: 3, hullC: 0x5f4a34, trimC: 0xb9a77c },
+  brig: { name: 'Brig', role: 'Strong', len: 28, beam: 8.2, masts: 2, guns: 5, hp: 235, speed: 14, turn: 0.5, cargo: 34, crew: 3, price: 2600, level: 4, hullC: 0x33291f, trimC: 0x8a2a22 },
+  schooner: { name: 'Schooner', role: 'Fast', len: 28, beam: 6.8, sharp: true, masts: 2, rig: 'gaff', rake: 0.1, guns: 4, hp: 175, speed: 19.5, turn: 0.62, cargo: 26, crew: 2, price: 3400, level: 5, hullC: 0x1f2c33, trimC: 0xcfc7b0 },
+  xebec: { name: 'Xebec', role: 'Fast and strong', len: 31, beam: 7.6, sharp: true, masts: 3, rig: 'lateen', beak: true, guns: 6, hp: 245, speed: 18, turn: 0.6, cargo: 30, crew: 3, price: 5200, level: 6, hullC: 0x5a3a24, trimC: 0x2f6f73 },
+  brigantine: { name: 'Brigantine', role: 'All-rounder', len: 31, beam: 8.6, masts: 2, tall: 1.06, guns: 6, hp: 300, speed: 15.5, turn: 0.5, cargo: 46, crew: 3, price: 5800, level: 6, hullC: 0x3a3028, trimC: 0xb58a2e },
+  galleon: { name: 'Galleon', role: 'Cargo and strong', len: 35, beam: 10.6, fat: 0.7, masts: 3, castle: 3.2, fore: 1.6, gild: true, guns: 7, hp: 410, speed: 12, turn: 0.4, cargo: 92, crew: 4, price: 8200, level: 7, hullC: 0x4a3020, trimC: 0x8a2a22, band: 0x6b4a2c },
+  frigate: { name: 'Frigate', role: 'Strong', len: 37, beam: 9.6, masts: 3, guns: 8, hp: 430, speed: 15, turn: 0.44, cargo: 50, crew: 4, price: 9800, level: 8, hullC: 0x25221f, trimC: 0x25221f, band: 0xc9a94a },
+  clipper: { name: 'Clipper', role: 'Fastest', len: 40, beam: 8, sharp: true, masts: 3, tall: 1.12, rake: 0.05, guns: 6, hp: 310, speed: 21.5, turn: 0.5, cargo: 46, crew: 3, price: 12500, level: 9, hullC: 0x12222a, trimC: 0xd9cdb0, bottom: 0x4f7f6e },
+  indiaman: { name: 'East Indiaman', role: 'Biggest hold', len: 41, beam: 11.8, fat: 1, masts: 3, castle: 3, fore: 1.4, gild: true, guns: 8, hp: 540, speed: 12.5, turn: 0.38, cargo: 140, crew: 5, price: 15500, level: 9, hullC: 0x3a2a1c, trimC: 0x27406b, band: 0xcfc7b0 },
+  manowar: { name: "Man-o'-War", role: 'Strongest', len: 45, beam: 12, decks: 2, masts: 3, tall: 1.05, castle: 3.4, fore: 1.5, gild: true, guns: 12, hp: 740, speed: 13, turn: 0.36, cargo: 70, crew: 6, price: 22000, level: 10, hullC: 0x1e1b19, trimC: 0x7d1f1a, band: 0xc9a94a },
 };
 
 // Each track has 5 levels. cost(level) = base * (level+1)^1.5
@@ -84,18 +95,21 @@ export const FOES = {
   skeleton: { name: 'Cursed Dead', hp: 36, dmg: 12, speed: 3.9, tele: 0.5, look: 'skeleton', xp: 14, gold: [2, 10] },
   crab: { name: 'Giant Crab', hp: 34, dmg: 9, speed: 4.4, tele: 0.45, look: 'crab', xp: 10, gold: [0, 4] },
   crabking: { name: 'The Crab King', hp: 520, dmg: 26, speed: 3.4, tele: 0.85, look: 'crab', heavy: true, scale: 3.2, boss: true, xp: 300, gold: [350, 500] },
+  warden: { name: 'Bone Warden', hp: 300, dmg: 22, speed: 3.2, tele: 0.9, look: 'skeleton', heavy: true, scale: 1.6, mini: true, xp: 150, gold: [120, 220] },
+  chief: { name: 'Bandit Chief', hp: 260, dmg: 18, speed: 4.0, tele: 0.5, look: 'captain', scale: 1.2, mini: true, xp: 130, gold: [120, 200] },
+  matriarch: { name: 'Crab Matriarch', hp: 280, dmg: 18, speed: 3.8, tele: 0.7, look: 'crab', heavy: true, scale: 2, mini: true, xp: 140, gold: [80, 160] },
   crew: { name: 'Crewmate', hp: 70, dmg: 11, speed: 4.0, tele: 0.5, look: 'crew' },
 };
 
 // Sea enemies.
 export const SEA_FOES = {
-  merchant: { name: 'Merchant Sloop', cls: 'sloop', faction: 'merchant', hp: 85, guns: 2, dmg: 5, crew: ['brigand', 'brigand', 'marksman'], gold: [70, 150], goods: 6, xp: 30, flee: true },
+  merchant: { name: 'Merchant Fluyt', cls: 'fluyt', faction: 'merchant', hp: 85, guns: 2, dmg: 5, crew: ['brigand', 'brigand', 'marksman'], gold: [70, 150], goods: 6, xp: 30, flee: true },
   pirate: { name: 'Bloodwater Sloop', cls: 'sloop', faction: 'pirate', hp: 105, guns: 3, dmg: 6, crew: ['brigand', 'brigand', 'brigand', 'marksman'], gold: [50, 120], goods: 3, xp: 45 },
   pirate2: { name: 'Bloodwater Brig', cls: 'brig', faction: 'pirate', hp: 200, guns: 5, dmg: 7, crew: ['brigand', 'brigand', 'marksman', 'brute', 'captain'], gold: [140, 280], goods: 6, xp: 95, level: 3 },
   navy: { name: 'Navy Brig', cls: 'brig', faction: 'navy', hp: 230, guns: 5, dmg: 7, crew: ['soldier', 'soldier', 'soldier', 'marksman', 'captain'], gold: [120, 240], goods: 4, xp: 110 },
   navy2: { name: 'Navy Frigate', cls: 'frigate', faction: 'navy', hp: 380, guns: 8, dmg: 8, crew: ['soldier', 'soldier', 'soldier', 'marksman', 'marksman', 'brute', 'captain'], gold: [260, 480], goods: 8, xp: 220, level: 6 },
-  hunter: { name: 'Navy Hunter', cls: 'frigate', faction: 'navy', hp: 560, guns: 9, dmg: 10, crew: ['soldier', 'soldier', 'soldier', 'soldier', 'marksman', 'marksman', 'brute', 'captain'], gold: [400, 650], goods: 6, xp: 320 },
-  ghost: { name: 'The Drowned Queen', cls: 'frigate', faction: 'ghost', hp: 560, guns: 7, dmg: 9, crew: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'skeleton', 'brute', 'captain'], gold: [900, 1200], goods: 0, xp: 500, boss: true },
+  hunter: { name: 'Navy Hunter', cls: 'manowar', faction: 'navy', hp: 560, guns: 9, dmg: 10, crew: ['soldier', 'soldier', 'soldier', 'soldier', 'marksman', 'marksman', 'brute', 'captain'], gold: [400, 650], goods: 6, xp: 320 },
+  ghost: { name: 'The Drowned Queen', cls: 'galleon', faction: 'ghost', hp: 560, guns: 7, dmg: 9, crew: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'skeleton', 'brute', 'captain'], gold: [900, 1200], goods: 0, xp: 500, boss: true },
 };
 
 export const RANKS = ['Deckhand', 'Swab', 'Cutthroat', 'Buccaneer', 'Corsair', 'Reaver', 'Sea Wolf', 'Captain', 'Dread Captain', 'Scourge', 'Pirate Lord'];
@@ -184,10 +198,14 @@ export const DEEDS = [
 ];
 // Bounties: named captains, each stronger than the last, and stronger again every time they return.
 export const BOUNTIES = [
-  { id: 'b_meg', captain: 'Red Meg Harrow', ship: 'Wicked Tide', cls: 'sloop', hp: 200, guns: 4, dmg: 8, level: 2, gold: 500, crew: ['brigand', 'brigand', 'marksman', 'captain'] },
-  { id: 'b_crane', captain: 'Silas "Gallows" Crane', ship: "Hangman's Due", cls: 'brig', hp: 340, guns: 6, dmg: 9, level: 4, gold: 1100, crew: ['brigand', 'brigand', 'marksman', 'brute', 'captain'] },
-  { id: 'b_vane', captain: 'Mother Vane', ship: 'Black Psalm', cls: 'brig', hp: 460, guns: 7, dmg: 10, level: 6, gold: 1900, crew: ['brigand', 'brigand', 'marksman', 'marksman', 'brute', 'captain'] },
+  { id: 'b_meg', captain: 'Red Meg Harrow', ship: 'Wicked Tide', cls: 'schooner', hp: 200, guns: 4, dmg: 8, level: 2, gold: 500, crew: ['brigand', 'brigand', 'marksman', 'captain'] },
+  { id: 'b_crane', captain: 'Silas "Gallows" Crane', ship: "Hangman's Due", cls: 'brigantine', hp: 340, guns: 6, dmg: 9, level: 4, gold: 1100, crew: ['brigand', 'brigand', 'marksman', 'brute', 'captain'] },
+  { id: 'b_vane', captain: 'Mother Vane', ship: 'Black Psalm', cls: 'xebec', hp: 460, guns: 7, dmg: 10, level: 6, gold: 1900, crew: ['brigand', 'brigand', 'marksman', 'marksman', 'brute', 'captain'] },
   { id: 'b_ash', captain: 'Ashdown the Turncoat', ship: 'Iron Tithe', cls: 'frigate', hp: 640, guns: 9, dmg: 11, level: 8, gold: 3200, crew: ['soldier', 'soldier', 'brigand', 'marksman', 'marksman', 'brute', 'captain'] },
-  { id: 'b_nine', captain: 'Nine-Lives Okoro', ship: 'Last Laugh', cls: 'frigate', hp: 840, guns: 10, dmg: 12, level: 10, gold: 5000, crew: ['brigand', 'brigand', 'brigand', 'marksman', 'marksman', 'brute', 'brute', 'captain'] },
+  { id: 'b_nine', captain: 'Nine-Lives Okoro', ship: 'Last Laugh', cls: 'manowar', hp: 840, guns: 10, dmg: 12, level: 10, gold: 5000, crew: ['brigand', 'brigand', 'brigand', 'marksman', 'marksman', 'brute', 'brute', 'captain'] },
 ];
 for (const b of BOUNTIES) { SEA_FOES[b.id] = { name: b.ship, cls: b.cls, faction: 'pirate', hp: b.hp, guns: b.guns, dmg: b.dmg, crew: b.crew, gold: [b.gold * 0.2, b.gold * 0.3], goods: 8, xp: Math.round(b.gold * 0.2), bounty: true }; RANSOM[b.id] = Math.round(b.gold * 0.4); }
+
+// What lives in each island's cave.
+export const CAVE_FOES = { bones: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'warden'], tooth: ['skeleton', 'skeleton', 'skeleton', 'warden'], saltmere: ['brigand', 'brigand', 'marksman', 'chief'], regal: ['brigand', 'brigand', 'marksman', 'chief'], blood: ['brigand', 'brigand', 'brigand', 'brute'], crab: ['crab', 'crab', 'crab', 'crab', 'matriarch'] };
+export const BOMB = { name: 'Powder flask', desc: 'Throw it at a knot of enemies. It bursts on landing and hurts everything close.', gold: 45, max: 6 };

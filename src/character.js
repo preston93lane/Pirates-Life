@@ -122,6 +122,17 @@ export function buildCharacter(lookName, opts = {}) {
     return [l, s];
   };
   [P.legR, P.shinR] = leg(-1); [P.legL, P.shinL] = leg(1);
+  if (!L.bone) { // the small things that make a figure read as a person
+    part(limb(0.055, 0.065, 0.1), skin, P.torso, 0, 0.66, 0); // neck
+    part(bx(0.09, 0.07, 0.03), 0xc79a3a, P.torso, 0, 0.05, 0.135 * bulk); // belt buckle
+    for (const s of [P.shinL, P.shinR]) part(limb(0.092 * bulk, 0.08 * bulk, 0.1), L.boots, s);
+    if (L.coat) { part(bx(0.34 * bulk, 0.1, 0.1), L.coat, P.torso, 0, 0.6, -0.1); for (const f of [P.foreL, P.foreR]) part(limb(0.07 * bulk, 0.07 * bulk, 0.07), L.shirt || L.coat, f, 0, -0.19, 0); }
+    if (L.weapon) { const st = part(bx(0.06, 0.74, 0.03), 0x2a1d14, P.torso, 0, 0.3, 0.165 * bulk); st.rotation.z = 0.62; } // baldric
+    const seed = (L.skinI ?? opts.seed ?? Math.random() * 4) * 7 % 3;
+    if (lookName !== 'player' && seed > 1.4 && !L.apron) part(bx(0.16, 0.1, 0.08), 0x2a1d14, P.head, 0, 0.045, 0.085); // beard
+    if (lookName === 'captain' || lookName === 'soldier') for (const sx of [-1, 1]) part(bx(0.13, 0.04, 0.14), 0xc79a3a, P.torso, sx * 0.29 * bulk, 0.585, 0);
+    if (lookName === 'captain') part(bx(0.04, 0.26, 0.12), 0x8a2a22, P.head, 0.14, 0.36, -0.06).rotation.z = -0.5; // hat feather
+  }
   if (!opts.noShadow) { const sh = new THREE.Mesh(G('shadow', () => new THREE.CircleGeometry(0.5, 12).rotateX(-Math.PI / 2)), SHADOW); sh.position.y = 0.04; root.add(sh); }
 
   const armed = !!L.weapon, c = { root, P, anim: { state: 'idle', u: 0, i: 0, ph: 0, t: 0, speed: 0 }, height: 1.85 };
@@ -156,6 +167,8 @@ export function buildCharacter(lookName, opts = {}) {
     else if (a.state === 'aim') { T.aRx = -1.45; T.fRx = -0.1; T.wRx = 1.55; T.aLx = -1.2; T.aLz = -0.5; T.fLx = -0.6; T.tY = 0.25; }
     else if (a.state === 'dig') { const s = Math.sin(a.t * 9); T.tX = 0.75 + s * 0.15; T.aRx = -0.9 - s * 0.5; T.aLx = -0.9 - s * 0.5; T.fRx = -0.4; T.fLx = -0.4; T.hipY = -0.2; T.lLx = -0.5; T.lRx = -0.5; T.sLx = 0.9; T.sRx = 0.9; }
     else if (a.state === 'roll') { T.tX = 0.9; T.lLx = -1.6; T.lRx = -1.6; T.sLx = 1.9; T.sRx = 1.9; T.aRx = -0.9; T.aLx = -0.9; T.hipY = -0.3; rate = 30; }
+    else if (a.state === 'whirl') { T.aRx = -1.45; T.aRz = -1.25; T.fRx = -0.05; T.wRx = 1.6; T.tX = 0.18; T.hipY = -0.1; T.lLx = -0.4; T.lRx = 0.35; rate = 32; }
+    else if (a.state === 'throw') { T.aLx = -2.6 + smooth(0.2, 0.5, a.u) * 2.0; T.aLz = -0.2; T.fLx = -0.4; T.tY = -0.3 + smooth(0.2, 0.5, a.u) * 0.6; rate = 28; }
     for (const k of KEYS) cur[k] = damp(cur[k], T[k], rate, dt);
     P.hips.position.y = 0.92 + cur.hipY; P.torso.rotation.set(cur.tX, cur.tY, 0);
     P.armR.rotation.set(cur.aRx, 0, cur.aRz); P.foreR.rotation.x = cur.fRx; P.weapon.rotation.set(cur.wRx, 0, cur.wRz);
@@ -165,6 +178,7 @@ export function buildCharacter(lookName, opts = {}) {
     if (a.state === 'roll') { P.pivot.rotation.x = a.u * Math.PI * 2; P.pivot.position.y = 0.92 - Math.sin(a.u * Math.PI) * 0.35; }
     else if (a.state === 'dead') { const k = Math.min(1, a.t / 0.45); P.pivot.rotation.x = -k * k * (Math.PI / 2); P.pivot.position.y = 0.92 - k * 0.78; }
     else { P.pivot.rotation.x = 0; P.pivot.position.y = 0.92; }
+    P.pivot.rotation.y = a.state === 'whirl' ? a.u * Math.PI * 2 : 0;
   };
   c.setBlade = (color) => { P.weapon.children[0].material = mat(color); P.weapon.children[1].material = mat(color); };
   c.update(0.016);

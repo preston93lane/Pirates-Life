@@ -14,7 +14,46 @@ function tone({ f0 = 440, f1 = 440, dur = 0.2, vol = 0.3, type = 'sine', delay =
   env(g, t, 0.004, vol, dur); o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
 }
 
+// ---------- music: a tiny sequencer playing original jig-time tunes in D dorian ----------
+const SCALE = [0, 2, 3, 5, 7, 9, 10], _ = null;
+const hz = (deg, oct = 0) => 293.66 * Math.pow(2, oct + Math.floor(deg / 7) + SCALE[((deg % 7) + 7) % 7] / 12);
+const TUNES = {
+  sail: { bpm: 100, vol: 1, drum: 0.5, lead: [0, _, 2, 4, _, 4, 5, 4, 2, 4, _, _, 0, _, 2, 4, _, 7, 6, 4, 2, 1, _, _, 0, _, 2, 4, _, 4, 7, _, 6, 4, _, 2, 3, 2, 0, 1, _, -1, 0, _, _, _, _, _], bass: [0, 0, 3, 4, 0, 5, 3, 0] },
+  battle: { bpm: 138, vol: 1.15, drum: 1, lead: [0, 0, 4, 0, 0, 4, 3, 3, 6, 3, 3, 6, 0, 0, 4, 0, 0, 7, 6, 4, 2, 1, -1, 0, 7, 7, 4, 7, 7, 4, 6, 6, 3, 6, 6, 3, 5, 4, 2, 4, 2, 0, 1, 2, 1, 0, _, _], bass: [0, 3, 0, 4, 0, 6, 5, 0] },
+  town: { bpm: 112, vol: 0.9, drum: 0.35, lead: [2, _, 4, 6, _, 4, 7, 6, 4, 6, _, _, 5, _, 4, 2, _, 4, 5, 4, 2, 1, _, _, 2, _, 4, 6, _, 9, 8, _, 7, 6, _, 4, 5, 4, 2, 4, _, 1, 2, _, _, _, _, _], bass: [2, 2, 5, 4, 2, 0, 5, 2] },
+  night: { bpm: 66, vol: 0.7, drum: 0, lead: [0, _, _, _, _, _, 4, _, _, 2, _, _, 1, _, _, _, _, _, -1, _, _, 0, _, _, 2, _, _, _, _, _, 4, _, _, 7, _, _, 6, _, _, 4, _, _, 0, _, _, _, _, _], bass: [0, 0, 5, 0, 3, 0, 4, 0] },
+};
+const music = { on: true, mood: 'sail', want: 'sail', step: 0, next: 0, timer: null, gain: null };
+function voice(freq, t, dur, vol, type, cut) {
+  const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter(), v = ctx.createOscillator(), vg = ctx.createGain();
+  o.type = type; o.frequency.value = freq; f.type = 'lowpass'; f.frequency.value = cut; v.frequency.value = 5.5; vg.gain.value = freq * 0.006; v.connect(vg).connect(o.frequency);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.03); g.gain.setValueAtTime(vol, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(f).connect(g).connect(music.gain); o.start(t); v.start(t); o.stop(t + dur + 0.05); v.stop(t + dur + 0.05);
+}
+function thump(t, vol, hi) {
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = noise; f.type = hi ? 'bandpass' : 'lowpass'; f.frequency.value = hi ? 1800 : 150;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + (hi ? 0.07 : 0.18)); s.connect(f).connect(g).connect(music.gain); s.start(t, Math.random()); s.stop(t + 0.25);
+}
+function schedule() {
+  if (!ctx || !music.on || ctx.state !== 'running') return;
+  if (music.next < ctx.currentTime) music.next = ctx.currentTime + 0.05;
+  while (music.next < ctx.currentTime + 0.4) {
+    if (music.step % 6 === 0 && music.want !== music.mood) { music.mood = music.want; music.step = 0; }
+    const T = TUNES[music.mood], d = 60 / T.bpm / 3 * 2, i = music.step % T.lead.length, n = T.lead[i], t = music.next, beat = music.step % 6;
+    if (n !== null) { let len = 1; while (T.lead[(i + len) % T.lead.length] === null && len < 6) len++; voice(hz(n), t, d * len * 0.95, 0.09 * T.vol, 'sawtooth', 1700); voice(hz(n, -1), t, d * len * 0.9, 0.035 * T.vol, 'square', 900); }
+    if (beat === 0 || beat === 3) { const b = T.bass[Math.floor(music.step / 6) % T.bass.length]; voice(hz(b, -2), t, d * 2.6, 0.12 * T.vol, 'triangle', 600); if (beat === 0) voice(hz(b + 4, -1), t, d * 5, 0.03 * T.vol, 'triangle', 900); }
+    if (T.drum) { if (beat === 0) thump(t, 0.5 * T.drum, false); else if (beat === 3) thump(t, 0.3 * T.drum, false); if (T.drum > 0.8 && (beat === 2 || beat === 5)) thump(t, 0.12, true); }
+    music.next += d; music.step++;
+  }
+}
+
 export const audio = {
+  // music and background sounds
+  setMusic(on) { music.on = on; if (music.gain) music.gain.gain.value = on ? 0.5 : 0; },
+  mood(m) { music.want = m; },
+  creak() { if (!ctx) return; tone({ f0: 70 + Math.random() * 30, f1: 110 + Math.random() * 40, dur: 0.5, vol: 0.06, type: 'sawtooth' }); burst({ type: 'bandpass', f0: 320, f1: 520, q: 6, dur: 0.45, vol: 0.05, attack: 0.1 }); },
+  gull() { if (!ctx) return; for (let i = 0; i < 3; i++) tone({ f0: 1900 - i * 120, f1: 1250, dur: 0.16, vol: 0.035, delay: i * 0.22 }); },
+  bell() { if (!ctx) return; for (const f of [880, 1320, 2210]) tone({ f0: f, f1: f, dur: 1.1, vol: 0.05, type: 'sine' }); },
   muted: false,
   init(muted) {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -27,6 +66,7 @@ export const audio = {
       const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
       src.buffer = noise; src.loop = true; f.type = 'lowpass'; f.frequency.value = 420; g.gain.value = 0.07; lfo.frequency.value = 0.11; lg.gain.value = 0.035;
       lfo.connect(lg).connect(g.gain); src.connect(f).connect(g).connect(master); src.start(); lfo.start(); amb = g;
+      music.gain = ctx.createGain(); music.gain.gain.value = music.on ? 0.5 : 0; music.gain.connect(master); music.timer = setInterval(schedule, 110);
     } catch (e) { ctx = null; }
   },
   setMuted(m) { this.muted = m; if (master) master.gain.value = m ? 0 : 0.8; },

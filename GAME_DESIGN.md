@@ -369,3 +369,57 @@ how PvP losses should feel (how much loot a raid can take).
 | Combat gets samey | Same three enemies | Shot types, surrender, flags and factions change how each fight goes | More enemy ship behaviours, sword skills, mini-bosses |
 | No sound identity | Feels flat without music | Synthesised effects | Music and voice barks |
 | Nothing to show off | No reason to tell a friend | Custom captain, sails and flag | Share-clip button, friends and raids (online phases) |
+
+---
+
+## 12. Fleet, deck life and the living world (build 0.4)
+
+### The twelve hulls
+Upgrades add a percentage to a hull's own numbers, so a small ship never catches a big one.
+
+| Hull | Role | Rig | Guns a side | Hull | Speed | Hold | Price |
+|---|---|---|---|---|---|---|---|
+| Cutter | Starter | Gaff | 2 | 90 | 15 | 14 | free |
+| Sloop | Fast | Square | 3 | 125 | 17 | 18 | 900 |
+| Fluyt | Cargo | Square, fat hull | 3 | 180 | 12.5 | 56 | 1,700 |
+| Brig | Strong | Square | 5 | 235 | 14 | 34 | 2,600 |
+| Schooner | Fast | Gaff, raked masts | 4 | 175 | 19.5 | 26 | 3,400 |
+| Xebec | Fast and strong | Lateen, beaked bow | 6 | 245 | 18 | 30 | 5,200 |
+| Brigantine | All-rounder | Square, tall | 6 | 300 | 15.5 | 46 | 5,800 |
+| Galleon | Cargo and strong | Square, high castles | 7 | 410 | 12 | 92 | 8,200 |
+| Frigate | Strong | Square, gun band | 8 | 430 | 15 | 50 | 9,800 |
+| Clipper | Fastest | Square, very tall | 6 | 310 | 21.5 | 46 | 12,500 |
+| East Indiaman | Biggest hold | Square, high castles | 8 | 540 | 12.5 | 140 | 15,500 |
+| Man-o'-War | Strongest | Square, two gun decks | 12 | 740 | 13 | 70 | 22,000 |
+
+Later these become the premium line: rare hulls, figureheads and paint are the natural cosmetic sale.
+
+### Deck life and the first mate
+- **Walk the deck** while under sail. The ship holds her course, or the **first mate** sails to
+  any place you mark on the chart, steering round land and furling sail on arrival.
+- Standing on the hatch lets you **patch the hull** with timber.
+- **Fast travel** to a known port for a pilot's fee.
+
+### Why this matters for multiplayer
+The deck is already a place with jobs. With several players on one ship each takes a station:
+helm, port guns, starboard guns, swivel, repair, boarding party. The first mate fills any
+empty station. Position on deck is stored in ship space (not world space), which is exactly
+what a server needs to keep several players standing on one moving ship.
+
+### Islands
+Coasts now have headlands and coves, some islands have mountains and jungle, and six have a
+**cave**: a dark room with a mini-boss and a hoard that refills over time. Each landing also
+rolls **chance encounters** that stay off the compass until you are close: buried caches,
+castaways, idols that bless or curse, and ambushes.
+
+### On foot
+WHIRL (a spin that cuts everything around you, on a cooldown), powder flasks (thrown, burst on
+a group), three mini-bosses, and enemy ships that use chain and fire shot and board *you* when
+your hull is low.
+
+### Day, night, sound, speed
+A full day runs about 13 minutes with dawn, dusk, stars and lit windows. Music is generated in
+code (sailing, town, night and battle tunes) with creaks and gulls, and has its own off switch.
+To pay for the richer look: far islands are hidden, mid-distance islands drop trees and
+buildings, the draw distance is cut to match the fog, and the Low graphics setting halves
+particles and sharpness.

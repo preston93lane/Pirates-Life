@@ -73,6 +73,16 @@ const DRAW = {
   window(x, w, h) { x.fillStyle = '#2a1e15'; x.fillRect(0, 0, w, h); const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#ffd98c'); g.addColorStop(1, '#d9862e'); x.fillStyle = g; x.fillRect(7, 7, w - 14, h - 14); x.fillStyle = 'rgba(255,255,255,.25)'; x.fillRect(9, 9, w * 0.3, h * 0.25); x.fillStyle = '#2a1e15'; x.fillRect(w / 2 - 2, 0, 4, h); x.fillRect(0, h / 2 - 2, w, 4); x.fillRect(0, h * 0.26, w, 2); x.fillRect(0, h * 0.74, w, 2); },
   door(x, w, h) { x.fillStyle = '#4a3423'; x.fillRect(0, 0, w, h); for (let i = 0; i < 4; i++) { x.fillStyle = grey(0, R(0.05, 0.28)); x.fillRect(i * w / 4, 0, w / 4 - 2, h); x.fillStyle = grey(0, 0.6); x.fillRect((i + 1) * w / 4 - 2, 0, 2, h); } x.fillStyle = '#1d1f21'; x.fillRect(0, h * 0.18, w, 7); x.fillRect(0, h * 0.72, w, 7); x.beginPath(); x.arc(w * 0.8, h * 0.5, 4, 0, 7); x.fill(); x.strokeStyle = '#1b130d'; x.lineWidth = 5; x.strokeRect(0, 0, w, h); },
 };
+let HULL = null;
+// Ship timbers: planking texture tinted by vertex colour, both sides drawn.
+export function hullMat() { if (!HULL) HULL = new THREE.MeshLambertMaterial({ map: kitMats().planks.map, vertexColors: true, flatShading: true, side: THREE.DoubleSide }); return HULL; }
+let GROUND = null;
+// Terrain: vertex colours carry the land's colour; a tiling noise texture adds grit up close.
+export function groundMat() {
+  if (!GROUND) GROUND = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, map: canvasTex(256, 256, (x, w, h) => { x.fillStyle = '#e2e0da'; x.fillRect(0, 0, w, h); for (let i = 0; i < 260; i++) { x.fillStyle = grey(Math.random() < 0.55 ? 30 : 255, R(0.03, 0.1)); x.beginPath(); x.ellipse(R(0, w), R(0, h), R(3, 22), R(2, 12), R(0, 3), 0, 7); x.fill(); } speckle(x, w, h, 2600, 0.16); }) });
+  return GROUND;
+}
+export function setGlow(k) { if (KIT_MAT) KIT_MAT.window.emissiveIntensity = 0.35 + k * 1.6; }
 let KIT_MAT = null;
 function kitMats() {
   if (KIT_MAT) return KIT_MAT;
@@ -83,13 +93,13 @@ function kitMats() {
   return KIT_MAT;
 }
 // Give a (non-indexed) part UVs from its world position, so textures tile at a constant real-world size.
-function boxUV(g, scale = 1 / 2.6) {
+export function boxUV(g, scale = 1 / 2.6, swapFlat = false) {
   const p = g.attributes.position, uv = g.attributes.uv, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
   for (let i = 0; i < p.count; i += 3) {
     a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
     n.copy(b).sub(a).cross(c.clone().sub(a)).normalize();
     const flat = Math.abs(n.y) > 0.92, hl = Math.hypot(n.x, n.z) || 1, tx = n.z / hl, tz = -n.x / hl;
-    for (let k = 0; k < 3; k++) { const v = k === 0 ? a : k === 1 ? b : c; if (flat) uv.setXY(i + k, v.x * scale, v.z * scale); else uv.setXY(i + k, (v.x * tx + v.z * tz) * scale, (v.y / hl) * scale); }
+    for (let k = 0; k < 3; k++) { const v = k === 0 ? a : k === 1 ? b : c; if (flat) { if (swapFlat) uv.setXY(i + k, v.z * scale, v.x * scale * 1.6); else uv.setXY(i + k, v.x * scale, v.z * scale); } else uv.setXY(i + k, (v.x * tx + v.z * tz) * scale, (v.y / hl) * scale); }
   }
 }
 // A Mesher that sorts parts into textured materials by colour (or an explicit kind). Same add() signature.

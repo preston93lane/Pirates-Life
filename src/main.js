@@ -17,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('c'), root = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
-const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(58, 1, 0.3, 7000);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(58, 1, 0.3, 1750);
 
 const game = {
   scene, camera, renderer, input, time: 0, mode: 'sea', started: false, paused: false, ctx: null, stop: 0,
@@ -52,6 +52,7 @@ function fade(fn) {
   if (busy) return; busy = true; game.ui.fade(true);
   setTimeout(() => { fn(); for (const k in input.pressed) input.pressed[k] = false; setTimeout(() => { game.ui.fade(false); busy = false; }, 120); }, 340);
 }
+game.fade = fade;
 game.goAshore = (isl) => fade(() => {
   const p = game.sea.player, a = isl.anchor;
   p.x = a.x; p.z = a.z; p.heading = a.heading; p.speed = 0; p.sail = 0; p.rudder = 0; p.frozen = true;
@@ -61,7 +62,17 @@ game.goAshore = (isl) => fade(() => {
   save();
 });
 game.setSail = () => fade(() => { game.land.leave(); game.mode = 'sea'; game.sea.player.frozen = false; game.cam.off = 0; game.cam.pitch = 0.3; save(); });
-game.board = (enemy) => fade(() => { if (game.mode !== 'sea') return; game.land.enterBoarding(enemy); game.mode = 'board'; game.cam.yaw = game.land.player.face; game.cam.pitch = 0.62; });
+game.walkDeck = () => fade(() => { if (game.mode !== 'sea') return; game.land.enterDeck(); game.mode = 'deck'; game.cam.yaw = game.sea.player.heading; game.cam.pitch = 0.45; game.tip2('deck', 'You are on deck. The ship holds her course, or the first mate sails if you set one on the chart. Stand on the hatch to patch the hull. Tap Take the helm to steer again.'); });
+game.takeHelm = () => fade(() => { if (game.mode !== 'deck') return; game.land.leave(); game.mode = 'sea'; game.cam.off = 0; game.cam.pitch = 0.3; });
+// Pay a pilot to take you straight to a port you know.
+game.fastTravel = (isl, cost) => {
+  const s = game.save, sea = game.sea, p = sea.player;
+  if (game.mode === 'board' || sea.kraken) return game.toast('Not in the middle of a fight.', 'warn');
+  if (sea.ships.some((x) => x.alive && (x.provoked || x.hunter) && dist2(x.x, x.z, p.x, p.z) < 420)) return game.toast('Enemies are too close to slip away.', 'warn');
+  if (s.gold < cost) return game.toast('Not enough gold for the pilot.', 'warn');
+  fade(() => { s.gold -= cost; if (game.mode !== 'sea') game.land.leave(); game.mode = 'sea'; sea.mate = null; s.course = null; p.x = isl.anchor.x; p.z = isl.anchor.z; p.heading = isl.anchor.heading; p.speed = 0; p.sail = 0; p.frozen = false; game.cam.off = 0; game.world.tod = (game.world.tod + 0.12) % 1; sea.startEvent('none'); game.toast(`The pilot brings you in at ${isl.name}.`, 'gold'); save(); });
+};
+game.board = (enemy) => fade(() => { if (game.mode === 'deck') game.land.leave(); else if (game.mode !== 'sea') return; game.land.enterBoarding(enemy); game.mode = 'board'; game.cam.yaw = game.land.player.face; game.cam.pitch = 0.62; });
 // Take their captain if there is a free cell in the brig.
 game.capture = (sh) => {
   const s = game.save, value = RANSOM[sh.type];
@@ -103,6 +114,7 @@ game.reveal = (x, z, r) => {
 };
 // Losing twice in a row quietly softens enemy blows for a while, so a bad run does not become a wall.
 const mercy = () => { const s = game.save, before = Math.floor(s.mercy || 0); s.mercy = Math.min(3, (s.mercy || 0) + 1); if (Math.floor(s.mercy) > before && s.mercy >= 2) game.toast('The sea goes a little easier on you for now.', 'dim'); };
+game.tip2 = (id, text, secs = 12) => { const s = game.save; if (s.tips[id]) return; s.tips[id] = true; setTimeout(() => game.ui.hint(text, secs), 700); };
 game.tip = (id, text, secs = 10) => { const s = game.save; if (s.tips[id] || game.mode !== 'sea') return; s.tips[id] = true; game.ui.hint(text, secs); };
 game.playerFell = () => setTimeout(() => fade(() => {
   mercy(); const loss = deathTax(game.save);
@@ -113,6 +125,7 @@ game.playerFell = () => setTimeout(() => fade(() => {
   } else { game.land.enter(game.land.isl); game.toast(`You wake on the beach, lighter by ${loss} gold.`, 'warn'); }
 }), 1700);
 game.playerSunk = () => setTimeout(() => fade(() => {
+  if (game.mode === 'deck') { game.land.leave(); game.mode = 'sea'; }
   mercy(); const s = game.save, loss = deathTax(s), home = ISLAND[s.home || 'saltmere'], sea = game.sea;
   for (const g in s.cargo) s.cargo[g] = Math.floor(s.cargo[g] / 2);
   s.ship.hp = 0.6; s.pos = { x: home.anchor.x, z: home.anchor.z, h: home.anchor.heading };
@@ -127,11 +140,12 @@ game.restart = () => { game.ui.close(); const sea = game.sea; if (game.mode !== 
 function save() {
   const s = game.save, p = game.sea.player;
   if (p && p.alive) { s.pos = { x: p.x, z: p.z, h: p.heading }; s.ship.hp = clamp(p.hp / p.maxHp, 0.05, 1); }
-  s.fog = Array.from(game.fog).join('');
+  s.fog = Array.from(game.fog).join(''); s.tod = game.world.tod;
   writeSave(s);
 }
 function begin(s) {
   game.save = s; const sea = game.sea; setPlayerLook(lookSpec(s));
+  game.world.tod = s.tod ?? 0.42;
   game.fog.fill(0); for (let i = 0; i < s.fog.length && i < game.fog.length; i++) game.fog[i] = s.fog[i] === '1' ? 1 : 0;
   for (const id in s.seen) if (ISLAND[id]) game.reveal(ISLAND[id].x, ISLAND[id].z, ISLAND[id].r + 120);
   if (sea.player) { scene.remove(sea.player.group); sea.player = null; }
@@ -151,7 +165,7 @@ function updateCamera(dt) {
   } else {
     const p = game.land.player; c.yaw -= lx * 0.007; c.pitch = clamp(c.pitch + ly * 0.004, 0.05, 1.1);
     if (c.lookT <= 0 && p.alive) c.yaw -= input.move.x * 1.15 * dt;
-    tx = p.x; ty = p.y + 1.55; tz = p.z; dist = game.mode === 'board' ? 15 : 8;
+    tx = p.x; ty = p.y + 1.55; tz = p.z; dist = game.mode === 'board' ? 15 : game.mode === 'deck' ? 12 : 8;
   }
   const k = game.started ? 1 - Math.exp(-12 * dt) : 1;
   c.look.x += (tx - c.look.x) * k; c.look.y += (ty - c.look.y) * k; c.look.z += (tz - c.look.z) * k;
@@ -177,7 +191,16 @@ window.addEventListener('resize', resize); window.addEventListener('orientationc
 if (window.ResizeObserver) new ResizeObserver(resize).observe(root);
 
 // ---------- frame loop ----------
-let last = performance.now(), saveT = 0;
+let last = performance.now(), saveT = 0, moodT = 0;
+// pick the tune that fits the moment, and scatter a few ship and shore sounds
+function soundscape(dt) {
+  moodT -= dt; if (moodT > 0) return; moodT = 1.2;
+  const sea = game.sea, land = game.land, m = game.mode, t = sea.target;
+  const fight = m === 'board' || sea.kraken || (m !== 'sea' && m !== 'deck' && land.player && land.player.combat > 0) || ((m === 'sea' || m === 'deck') && t && t.def && (t.provoked || t.hunter) && !t.surrendered);
+  audio.mood(fight ? 'battle' : m === 'land' && land.isl && land.isl.kind === 'town' && !land.cave ? 'town' : game.world.night > 0.6 || land.cave ? 'night' : 'sail');
+  if ((m === 'sea' || m === 'deck') && Math.random() < 0.22) audio.creak();
+  if (game.world.night < 0.3 && !land.cave && Math.random() < 0.07) audio.gull();
+}
 function frame(now) {
   requestAnimationFrame(frame);
   const raw = Math.min(0.1, (now - last) / 1000); last = now;
@@ -190,14 +213,15 @@ function frame(now) {
   if (running || !game.started) game.time += dt;
   if (running) {
     const sim = dt;
-    game.sea.update(sim, game.mode === 'sea');
+    game.sea.update(sim, game.mode === 'sea' || game.mode === 'deck');
     if (game.mode !== 'sea') game.land.update(sim);
     if (game.mode === 'land') game.reveal(game.land.player.x, game.land.player.z, 200);
     game.ctx = game.mode === 'sea' ? game.sea.context() : game.land.context();
     if (input.take('ctx') && game.ctx) { audio.ui(); game.ctx.run(); }
     if (input.take('menu')) game.ui.openMenu();
+    if (game.mode === 'sea') { input.pressed.skill = input.pressed.bomb = false; }
     if (game.mode !== 'sea') { input.pressed.sailUp = input.pressed.sailDown = input.pressed.ammo = input.pressed.swivel = false; }
-    game.ui.update(raw);
+    game.ui.update(raw); soundscape(raw);
     saveT += raw; if (saveT > 15) { saveT = 0; save(); }
   } else if (!game.started) game.sea.update(dt, false);
   game.fx.update(dt);
@@ -212,7 +236,7 @@ begin(game.save);
 resize();
 game.ui.showTitle(game.hadSave);
 function start(fresh) {
-  audio.init(game.save.muted);
+  audio.init(game.save.muted); audio.setMusic(game.save.music !== false);
   if (fresh) begin(newSave());
   game.started = true; game.ui.hideTitle(); game.cam.off = 0; game.cam.pitch = 0.3;
   const o = game.quests.objective(); game.ui.banner(game.save.story.i ? 'Current chapter' : 'Chapter one', o.title, o.text);

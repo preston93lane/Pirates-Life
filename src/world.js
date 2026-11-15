@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { ISLANDS, WORLD_R, BUILDINGS } from './data.js';
 import { fbm, noise, smooth, lerp, clamp, rng, WAVES, TAU, SEA } from './util.js';
-import { Mesher, Kit, MAT, box, cyl, cone, ball } from './geo.js';
+import { Mesher, Kit, MAT, box, cyl, cone, ball, groundMat, setGlow } from './geo.js';
 import { staticFigure } from './character.js';
 
 export const PAL = {
@@ -14,18 +14,26 @@ export const PAL = {
 const KINDS = { [PAL.plaster]: 'plaster', [PAL.white]: 'plaster', [PAL.timber]: 'planks', [PAL.darkTimber]: 'planks', [PAL.plank]: 'planks', 0x80684c: 'planks', [PAL.stone]: 'stone', [PAL.darkRock]: 'stone', 0x8a857a: 'stone', 0x79756b: 'stone', 0x6f6b62: 'stone', [PAL.slate]: 'shingle', [PAL.tile]: 'shingle', 0x2d2b2a: 'shingle', [PAL.thatch]: 'thatch', [PAL.lit]: 'window' };
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, -0.72).normalize();
 
-const N = 84; // terrain grid resolution per island
-export const platforms = []; // walkable raised rectangles: piers, and ship decks while boarding
+const N = 100; // terrain grid resolution per island
+export const platforms = []; // walkable raised rectangles: piers, ship decks, the cave floor
+export const CAVE = { x: 4200, z: 0, ang: 0, hl: 17, hw: 11, top: 3 }; // one shared cave room, far outside the chart
+const MOUNT = { bones: 1.5, tooth: 1.6, regal: 0.8, saltmere: 0.6, blood: 0.5, rest: 0.45, crab: 0.15, gull: 0.3, shoals: 0.4 };
 
+// >0 inside the island. Several lobes make headlands; bays bite coves out of the coast.
+function coast(isl, x, z) {
+  const warp = 0.8 + 0.4 * fbm(x * 0.006 + isl.seed, z * 0.006 - isl.seed, 3);
+  let t = -9;
+  for (const L of isl.lobes) t = Math.max(t, 1 - Math.hypot(x - L.x, z - L.z) / (L.r * warp));
+  for (const B of isl.bays) { const cut = 1 - Math.hypot(x - B.x, z - B.z) / (B.r * warp); if (cut > 0) t = Math.min(t, 0.1 - cut * 1.2); }
+  return t;
+}
 function heightRaw(isl, x, z) {
-  const d = Math.hypot(x - isl.x, z - isl.z);
-  const warp = 0.78 + 0.44 * fbm(x * 0.006 + isl.seed, z * 0.006 - isl.seed, 3);
-  const t = 1 - d / (isl.r * warp);
+  const t = coast(isl, x, z);
   let h;
-  if (t < 0) h = Math.max(-14, -1.5 + t * 34);
+  if (t < 0) h = Math.max(-14, -1.5 + t * 30);
   else {
-    const n = fbm(x * 0.017 + isl.seed * 3.1, z * 0.017 + isl.seed, 4);
-    h = -1.5 + smooth(0, 0.16, t) * 3.4 + smooth(0.14, 0.8, t) * isl.h * (0.18 + 1.5 * n * n);
+    const n = fbm(x * 0.017 + isl.seed * 3.1, z * 0.017 + isl.seed, 4), ridge = 1 - Math.abs(2 * fbm(x * 0.0085 - isl.seed, z * 0.0085 + isl.seed * 2, 3) - 1);
+    h = -1.5 + smooth(0, 0.16, t) * 3.4 + smooth(0.14, 0.8, t) * isl.h * (0.18 + 1.5 * n * n) + smooth(0.25, 0.85, t) * isl.h * (MOUNT[isl.id] || 0.3) * Math.pow(ridge, 2.2) * 1.6;
   }
   for (const f of isl.flats) {
     const w = smooth(f.r * 1.4, f.r * 0.85, Math.hypot(x - f.x, z - f.z));
@@ -39,11 +47,15 @@ export function islandAt(x, z) {
   return null;
 }
 export function heightAt(x, z) {
-  const i = islandAt(x, z);
-  if (!i) return -14;
-  const gx = (x - i.x + i.ext) / i.cell, gz = (z - i.z + i.ext) / i.cell;
-  const ix = Math.min(N - 1, gx | 0), iz = Math.min(N - 1, gz | 0), fx = gx - ix, fz = gz - iz, H = i.grid, s = N + 1;
-  return lerp(lerp(H[iz * s + ix], H[iz * s + ix + 1], fx), lerp(H[(iz + 1) * s + ix], H[(iz + 1) * s + ix + 1], fx), fz);
+  let best = -14;
+  for (const i of ISLANDS) {
+    if (!(Math.abs(x - i.x) < i.ext && Math.abs(z - i.z) < i.ext)) continue;
+    const gx = (x - i.x + i.ext) / i.cell, gz = (z - i.z + i.ext) / i.cell;
+    const ix = Math.min(N - 1, gx | 0), iz = Math.min(N - 1, gz | 0), fx = gx - ix, fz = gz - iz, H = i.grid, s = N + 1;
+    const h = lerp(lerp(H[iz * s + ix], H[iz * s + ix + 1], fx), lerp(H[(iz + 1) * s + ix], H[(iz + 1) * s + ix + 1], fx), fz);
+    if (h > best) best = h;
+  }
+  return best;
 }
 export function groundAt(x, z) {
   let h = heightAt(x, z);
@@ -65,7 +77,12 @@ const SITE = { town: [0.46, 52, 2.6], hideout: [0.42, 44, 2.6], fort: [0.36, 42,
 function plan(isl) {
   isl.dir = [Math.sin(isl.land), Math.cos(isl.land)];
   isl.perp = [Math.cos(isl.land), -Math.sin(isl.land)];
-  isl.ext = isl.r * 1.32; isl.cell = (isl.ext * 2) / N;
+  isl.ext = isl.r * 1.8; isl.cell = (isl.ext * 2) / N;
+  // coastline: a main body plus headlands, with a cove bitten out, all kept clear of the landing beach
+  const LR = rng(isl.seed * 131), off = (lo) => isl.land + (lo + LR() * (Math.PI - lo) * 0.9) * (LR() < 0.5 ? -1 : 1);
+  isl.lobes = [{ x: isl.x, z: isl.z, r: isl.r }]; isl.bays = [];
+  for (let i = 0; i < (isl.r > 100 ? 2 : 1); i++) { const an = off(1.15), d = isl.r * (0.55 + LR() * 0.25); isl.lobes.push({ x: isl.x + Math.sin(an) * d, z: isl.z + Math.cos(an) * d, r: isl.r * (0.42 + LR() * 0.22) }); }
+  if (isl.r > 90) { const an = off(1.4), d = isl.r * 0.98; isl.bays.push({ x: isl.x + Math.sin(an) * d, z: isl.z + Math.cos(an) * d, r: isl.r * 0.34 }); }
   const [k, fr, fy] = SITE[isl.kind];
   isl.site = { x: isl.x + isl.dir[0] * isl.r * k, z: isl.z + isl.dir[1] * isl.r * k };
   isl.flats = fr ? [{ x: isl.site.x, z: isl.site.z, r: fr, y: fy }] : [];
@@ -93,7 +110,7 @@ function plan(isl) {
   isl.local = local;
   const spot = (minH, maxH, avoid = 16) => {
     for (let n = 0; n < 200; n++) {
-      const a = R() * TAU, d = Math.sqrt(R()) * isl.r, x = isl.x + Math.sin(a) * d, z = isl.z + Math.cos(a) * d, h = heightAt(x, z);
+      const a = R() * TAU, d = Math.sqrt(R()) * isl.r * 1.55, x = isl.x + Math.sin(a) * d, z = isl.z + Math.cos(a) * d, h = heightAt(x, z);
       if (h < minH || h > maxH) continue;
       if (Math.hypot(x - isl.landing.x, z - isl.landing.z) < avoid * 2) continue;
       if (isl.flats.some((f) => Math.hypot(x - f.x, z - f.z) < f.r + 4)) continue;
@@ -103,6 +120,8 @@ function plan(isl) {
   };
   isl.spot = spot;
   for (let i = 0; i < 2; i++) isl.digs.push(spot(1.2, 9));
+  isl.pois = []; for (let i = 0; i < 5; i++) isl.pois.push(spot(1.6, 30, 22)); // places where chance encounters can turn up
+  if (isl.cave) isl.caveAt = spot(4, 60, 30);
   const nChest = isl.kind === 'islet' ? 1 : 3;
   for (let i = 0; i < nChest; i++) isl.chests.push(Object.assign(spot(2, 40), { id: `${isl.id}:${i}`, tier: isl.kind === 'town' ? 1 : 2 }));
 
@@ -135,12 +154,12 @@ function plan(isl) {
 
 // ---------- terrain mesh ----------
 function terrainMesh(isl) {
-  const s = N + 1, pos = new Float32Array(s * s * 3), col = new Float32Array(s * s * 3), idx = [];
+  const s = N + 1, pos = new Float32Array(s * s * 3), col = new Float32Array(s * s * 3), uv = new Float32Array(s * s * 2), idx = [];
   const c = new THREE.Color(), c2 = new THREE.Color(), H = isl.grid;
-  const tintA = isl.kind === 'ruins' ? PAL.jungle : isl.kind === 'crab' ? PAL.dryGrass : PAL.grass;
+  const tintA = isl.jungle ? PAL.jungle : isl.kind === 'crab' ? PAL.dryGrass : PAL.grass;
   for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
     const k = j * s + i, x = isl.x - isl.ext + i * isl.cell, z = isl.z - isl.ext + j * isl.cell, h = H[k];
-    pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
+    pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z; uv[k * 2] = x / 9; uv[k * 2 + 1] = z / 9;
     const hx = H[j * s + Math.min(N, i + 1)] - H[j * s + Math.max(0, i - 1)], hz = H[Math.min(N, j + 1) * s + i] - H[Math.max(0, j - 1) * s + i];
     const slope = Math.hypot(hx, hz) / (2 * isl.cell), n = noise(x * 0.09, z * 0.09);
     if (h < 0.1) c.set(PAL.wetSand).lerp(c2.set(PAL.abyss), smooth(0.1, -7, h));
@@ -149,7 +168,8 @@ function terrainMesh(isl) {
       c.set(tintA).lerp(c2.set(PAL.dryGrass), n * 0.6);
       c.lerp(c2.set(PAL.sand), smooth(2.6, 1.7, h));
       c.lerp(c2.set(isl.kind === 'fort' ? 0x6a4a3c : PAL.rock), smooth(0.45, 0.8, slope));
-      c.lerp(c2.set(PAL.darkRock), smooth(isl.h * 0.75, isl.h * 1.1, h) * 0.7);
+      c.lerp(c2.set(PAL.darkRock), smooth(isl.h * 0.8, isl.h * 1.5, h) * 0.75);
+      c.lerp(c2.set(0x9a958a), smooth(isl.h * 1.7, isl.h * 2.4, h) * 0.6);
     }
     for (const f of isl.flats) c.lerp(c2.set(PAL.dirt), smooth(f.r, f.r * 0.6, Math.hypot(x - f.x, z - f.z)) * 0.85);
     const v = 0.93 + n * 0.14;
@@ -162,10 +182,10 @@ function terrainMesh(isl) {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
-  return new THREE.Mesh(g, MAT);
+  return new THREE.Mesh(g, groundMat());
 }
 
 // ---------- reusable prop geometry ----------
@@ -189,6 +209,15 @@ function treeGeo() {
   m.add(ball(1.5), 0x2f4a2b, [-1.2, 4.5, -0.7], [1, 0, 0], [1, 0.7, 1], 0.14);
   return m.build();
 }
+function jungleTreeGeo() {
+  const m = new Mesher();
+  m.add(cyl(0.25, 0.5, 9, 6), 0x4a3c2c, [0, 4.5, 0], [0, 0, 0.04]);
+  for (let i = 0; i < 3; i++) m.add(cone(3.4 - i * 0.7, 1.6, 7), i % 2 ? 0x2c4a2a : 0x355a2e, [0.2 * i, 8 + i * 1.5, 0], [0, i, 0], [1, 1, 1], 0.16);
+  for (let i = 0; i < 4; i++) m.add(box(0.07, 3.5, 0.07), 0x2f4426, [Math.sin(i * 1.7) * 2, 6.6, Math.cos(i * 1.7) * 2]); // hanging vines
+  return m.build();
+}
+function fernGeo() { const m = new Mesher(); for (let i = 0; i < 6; i++) { const g = cone(0.22, 1.5, 3); g.translate(0, 0.75, 0); m.add(g, i % 2 ? 0x4f7a3a : 0x3f6a34, [0, 0, 0], [0.9, (i / 6) * TAU, 0], 1, 0.15); } return m.build(); }
+function deadTreeGeo() { const m = new Mesher(); m.add(cyl(0.12, 0.3, 5, 5), 0x6a6258, [0, 2.5, 0], [0, 0, 0.1]); m.add(cyl(0.05, 0.1, 2.4, 4), 0x6a6258, [0.9, 4, 0], [0, 0, -0.9]); m.add(cyl(0.05, 0.1, 2, 4), 0x6a6258, [-0.6, 3.4, 0.2], [0.3, 0, 0.8]); return m.build(); }
 function rockGeo() { const m = new Mesher(); m.add(new THREE.DodecahedronGeometry(1, 0), 0x77706a, [0, 0.3, 0], [0.4, 0.2, 0.1], [1, 0.7, 0.85], 0.1); return m.build(); }
 function bushGeo() { const m = new Mesher(); m.add(ball(1), 0x4a6232, [0, 0.45, 0], [0, 0, 0], [1, 0.6, 1], 0.14); m.add(ball(0.7), 0x3c5530, [0.7, 0.35, 0.3], [1, 1, 0], [1, 0.6, 1], 0.14); return m.build(); }
 
@@ -375,7 +404,7 @@ ${WAVE_GLSL}
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 const OCEAN_FRAG = `
-uniform float uTime; uniform float uAmp; uniform vec3 uSun, uSunCol, uDeep, uShallow, uZenith, uHorizon, uFog; uniform float uFogD; uniform vec3 uIsles[${ISLANDS.length}];
+uniform float uTime; uniform float uAmp; uniform float uLight; uniform vec3 uSun, uSunCol, uDeep, uShallow, uZenith, uHorizon, uFog; uniform float uFogD; uniform vec3 uIsles[${ISLANDS.length}];
 varying vec3 vW; varying float vH;
 void main() {
   vec2 p = vW.xz; float h = 0.0; vec2 g = vec2(0.0);
@@ -395,11 +424,11 @@ ${WAVE_GLSL}
   float shore = 0.0;
   for (int i = 0; i < ${ISLANDS.length}; i++) { float d = distance(p, uIsles[i].xy); shore = max(shore, 1.0 - smoothstep(uIsles[i].z * 0.8, uIsles[i].z * 1.25, d)); }
   vec3 base = mix(uDeep, uShallow, clamp(vH * 0.22 + 0.16 + shore * 0.55, 0.0, 1.0));
-  base *= 0.75 + 0.35 * max(dot(n, uSun), 0.0);
+  base *= (0.75 + 0.35 * max(dot(n, uSun), 0.0)) * uLight;
   vec3 col = mix(base, sky, fres * 0.8);
   col += uSunCol * (pow(max(dot(r, uSun), 0.0), 220.0) * 1.6 + pow(max(dot(r, uSun), 0.0), 24.0) * 0.12);
-  float crest = smoothstep(0.62 * uAmp, 1.05 * uAmp, vH + g.x * 0.5) * clamp(0.35 + 0.65 * sin(p.x * 1.7 + p.y * 2.3 + uTime) * sin(p.x * -0.83 + p.y * 1.21 - uTime * 0.7), 0.0, 1.0);
-  col = mix(col, vec3(0.92, 0.94, 0.9), crest * 0.5 * det * 2.0);
+  float crest = smoothstep(0.62 * uAmp, 1.05 * uAmp, vH + g.x * 0.5) * (0.5 + 0.5 * sin(p.x * 0.9 + p.y * 1.3 + uTime + 1.8 * sin(p.x * 0.37 - p.y * 0.51 + uTime * 0.6)));
+  col = mix(col, (uHorizon * 0.7 + uSunCol * 0.4), crest * 0.22 * det * 2.0);
   float f = 1.0 - exp(-uFogD * uFogD * dist * dist);
   col = mix(col, uFog, f);
   gl_FragColor = vec4(col, mix(mix(0.74, 0.98, fres), 1.0, f));
@@ -407,12 +436,15 @@ ${WAVE_GLSL}
   #include <colorspace_fragment>
 }`;
 const SKY_FRAG = `
-uniform vec3 uSun, uSunCol, uZenith, uHorizon, uFog; varying vec3 vDir;
+uniform vec3 uSun, uSunCol, uZenith, uHorizon, uFog; uniform float uNight; varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir); float y = d.y;
   vec3 col = mix(uHorizon, uZenith, pow(clamp(y, 0.0, 1.0), 0.55));
   float s = max(dot(d, uSun), 0.0);
   col += uSunCol * (pow(s, 900.0) * 3.0 + pow(s, 40.0) * 0.35 + pow(s, 6.0) * 0.18);
+  // stars come out at night
+  vec3 q = floor(d * 190.0); float star = step(0.991, fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453)) * uNight * smoothstep(0.05, 0.35, y);
+  col += vec3(star);
   col = mix(uFog, col, smoothstep(-0.02, 0.16, y));
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -435,20 +467,20 @@ export function createWorld(scene) {
   const hemi = new THREE.HemisphereLight(0xdfe6ea, 0x7a7060, 2.1); scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffe2b8, 2.5); sun.position.copy(SUN_DIR).multiplyScalar(100); scene.add(sun);
 
-  const shared = { uAmp: { value: 1 }, uTime: { value: 0 }, uSun: { value: SUN_DIR }, uSunCol: { value: C(PAL.sun) }, uZenith: { value: C(PAL.zenith) }, uHorizon: { value: C(PAL.horizon) }, uFog: { value: C(PAL.fog) } };
-  world.sky = new THREE.Mesh(new THREE.SphereGeometry(4000, 24, 12), new THREE.ShaderMaterial({ uniforms: shared, side: THREE.BackSide, depthWrite: false, fog: false, vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }', fragmentShader: SKY_FRAG }));
+  const shared = { uLight: { value: 1 }, uNight: { value: 0 }, uAmp: { value: 1 }, uTime: { value: 0 }, uSun: { value: SUN_DIR }, uSunCol: { value: C(PAL.sun) }, uZenith: { value: C(PAL.zenith) }, uHorizon: { value: C(PAL.horizon) }, uFog: { value: C(PAL.fog) } };
+  world.sky = new THREE.Mesh(new THREE.SphereGeometry(1350, 24, 12), new THREE.ShaderMaterial({ uniforms: shared, side: THREE.BackSide, depthWrite: false, fog: false, vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }', fragmentShader: SKY_FRAG }));
   world.sky.renderOrder = -10; world.sky.frustumCulled = false; scene.add(world.sky);
 
   for (const isl of ISLANDS) plan(isl);
-  world.ocean = new THREE.Mesh(oceanGeo(2600, 150), new THREE.ShaderMaterial({
+  world.ocean = new THREE.Mesh(oceanGeo(1500, 140), new THREE.ShaderMaterial({
     uniforms: Object.assign({ uDeep: { value: C(PAL.deep) }, uShallow: { value: C(PAL.shallow) }, uFogD: { value: scene.fog.density }, uIsles: { value: ISLANDS.map((i) => new THREE.Vector3(i.x, i.z, i.r)) } }, shared),
     vertexShader: OCEAN_VERT, fragmentShader: OCEAN_FRAG, transparent: true, depthWrite: false,
   }));
   world.ocean.frustumCulled = false; world.ocean.renderOrder = 1; scene.add(world.ocean);
-  world.abyss = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: PAL.abyss }));
+  world.abyss = new THREE.Mesh(new THREE.PlaneGeometry(3600, 3600).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: PAL.abyss }));
   world.abyss.position.y = -13.6; scene.add(world.abyss);
 
-  const palm = palmGeo(), tree = treeGeo(), rock = rockGeo(), bush = bushGeo();
+  const palm = palmGeo(), tree = treeGeo(), rock = rockGeo(), bush = bushGeo(), jtree = jungleTreeGeo(), fern = fernGeo(), dead = deadTreeGeo();
   for (const isl of ISLANDS) {
     world.byId[isl.id] = isl;
     const g = new THREE.Group(); isl.group = g; scene.add(g);
@@ -460,11 +492,18 @@ export function createWorld(scene) {
     if (isl.kind === 'ruins') ruins(m, isl);
     if (isl.kind === 'crab') crabNest(m, isl);
     g.add(m.mesh());
-    const dense = isl.kind === 'ruins' ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1;
+    const dense = isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1;
     scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35);
     if (isl.r > 100) scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5);
     scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.9);
     scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0);
+    scatter(g, isl, fern, Math.round(isl.r * 0.5 * dense), 1.8, 40, 0.6, 1.4, 0);
+    if (isl.jungle) scatter(g, isl, jtree, Math.round(isl.r * 0.42), 4, isl.h * 1.4, 0.8, 1.5, 0.5);
+    if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') scatter(g, isl, dead, 8, 1.5, 40, 0.8, 1.4, 0.3);
+    scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 2.2); // crags up high
+    if (isl.caveAt) { const c = isl.caveAt, cy = heightAt(c.x, c.z), k = new Kit(KINDS); // cave mouth
+      for (const [dx, sc] of [[-2.6, 2.6], [2.6, 2.8], [0, 2.2]]) k.add(new THREE.DodecahedronGeometry(1, 0), PAL.darkRock, [c.x + dx, cy + (dx ? 1.6 : 4.4), c.z], [dx, dx * 2, 0.3], [sc, dx ? sc * 1.3 : 1.4, sc], 0.1, 'plain');
+      k.add(box(3.4, 3.6, 0.6), 0x050505, [c.x, cy + 1.7, c.z - 0.9], [0, 0, 0], 1, 0, 'plain'); g.add(k.mesh()); isl.colliders.push({ x: c.x, z: c.z - 1.6, r: 2.2 }); }
   }
 
   // chart of the whole archipelago, used by the minimap and the map screen
@@ -477,20 +516,53 @@ export function createWorld(scene) {
   }
   ctx.putImageData(img, 0, 0); world.chart = cv;
 
-  // weather: 0 = fair, 1 = full storm
-  const fair = { fog: C(PAL.fog), zen: C(PAL.zenith), hor: C(PAL.horizon), sun: C(PAL.sun), deep: C(PAL.deep) };
-  const foul = { fog: C(0x444c52), zen: C(0x1c252c), hor: C(0x4f585c), sun: C(0x30302c), deep: C(0x081a22) };
-  world.weather = 0;
-  world.setWeather = (k) => {
-    world.weather = k; const o = world.ocean.material.uniforms;
-    shared.uFog.value.copy(fair.fog).lerp(foul.fog, k); shared.uZenith.value.copy(fair.zen).lerp(foul.zen, k); shared.uHorizon.value.copy(fair.hor).lerp(foul.hor, k);
-    shared.uSunCol.value.copy(fair.sun).lerp(foul.sun, k); o.uDeep.value.copy(fair.deep).lerp(foul.deep, k);
-    scene.fog.color.copy(shared.uFog.value); scene.background.copy(shared.uFog.value); scene.fog.density = 0.00135 + k * 0.0021; o.uFogD.value = scene.fog.density;
-    hemi.intensity = 2.1 - k * 1.0; sun.intensity = 2.5 - k * 2.0; SEA.amp = 1 + k * 1.5; shared.uAmp.value = SEA.amp;
+  // ----- the cave room (shared by every cave mouth) -----
+  platforms.push(CAVE);
+  { const k = new Kit(KINDS), c = CAVE;
+    k.add(box(c.hw * 2 + 8, 1, c.hl * 2 + 8), 0x3a3a3c, [c.x, c.top - 0.5, c.z], [0, 0, 0], 1, 0.1, 'stone');
+    for (let i = 0; i < 34; i++) { const t = (i / 34) * TAU, x = c.x + Math.sin(t) * (c.hw + 3.5), z = c.z + Math.cos(t) * (c.hl + 3.5), s = 3 + (i % 3) * 0.9; k.add(new THREE.DodecahedronGeometry(1, 0), i % 2 ? 0x34343a : 0x2a2a30, [x, c.top + s * 0.9, z], [i, i * 2, i * 0.5], [s, s * 1.9, s], 0.12, 'plain'); }
+    for (let i = 0; i < 9; i++) k.add(cone(0.5 + (i % 3) * 0.3, 2 + (i % 4), 5), 0x3c3c44, [c.x + Math.sin(i * 2.4) * (c.hw - 1.5), c.top + 1 + (i % 4) * 0.5, c.z + Math.cos(i * 1.7) * (c.hl - 2)], [0, i, 0], 1, 0.1, 'plain');
+    for (let i = 0; i < 6; i++) { const x = c.x + (i % 2 ? 1 : -1) * (c.hw - 0.5), z = c.z + (Math.floor(i / 2) - 1) * 10; k.add(cyl(0.08, 0.08, 1.6, 4), PAL.timber, [x, c.top + 1.4, z]); k.add(cone(0.28, 0.6, 5), 0xff9a3c, [x, c.top + 2.5, z], [0, 0, 0], 1, 0, 'plain'); }
+    for (let i = 0; i < 7; i++) k.add(cone(0.3, 1.3, 4), 0x5fd0c0, [c.x + Math.sin(i * 1.9) * 7, c.top + 0.6, c.z + Math.cos(i * 2.7) * 12], [0.3 * Math.sin(i), i, 0.3 * Math.cos(i)], 1, 0, 'plain');
+    const room = k.mesh(); scene.add(room); world.caveRoom = room;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(30, 12, 8), new THREE.MeshBasicMaterial({ color: 0x08080a, side: THREE.BackSide, fog: false })); dome.scale.y = 0.55; dome.position.set(c.x, c.top, c.z); scene.add(dome);
+  }
+
+  // ----- time of day and weather -----
+  const KEY = {
+    night: { fog: C(0x1a2536), zen: C(0x070c18), hor: C(0x22324c), sun: C(0x9fb6e6), deep: C(0x06131f), hemi: 1.2, sunI: 0.85, sky: C(0x8499c8) },
+    dawn: { fog: C(0xc59a7c), zen: C(0x46506e), hor: C(0xe8a670), sun: C(0xffb070), deep: C(0x0d2a3a), hemi: 1.5, sunI: 1.9, sky: C(0xe6c8b0) },
+    day: { fog: C(PAL.fog), zen: C(PAL.zenith), hor: C(PAL.horizon), sun: C(PAL.sun), deep: C(PAL.deep), hemi: 2.1, sunI: 2.5, sky: C(0xdfe6ea) },
   };
+  const foul = { fog: C(0x444c52), zen: C(0x1c252c), hor: C(0x4f585c), sun: C(0x30302c), deep: C(0x081a22) };
+  const cur = { fog: C(0), zen: C(0), hor: C(0), sun: C(0), deep: C(0) };
+  const SEG = [[0, 'night', 'night'], [0.2, 'night', 'dawn'], [0.27, 'dawn', 'day'], [0.36, 'day', 'day'], [0.64, 'day', 'dawn'], [0.73, 'dawn', 'night'], [0.8, 'night', 'night'], [1, 'night', 'night']];
+  world.weather = 0; world.tod = 0.42; world.cave = false; world.night = 0;
+  world.setWeather = (k) => { world.weather = k; SEA.amp = 1 + k * 1.5; shared.uAmp.value = SEA.amp; };
+  function applySky() {
+    const t = world.tod; let i = 0; while (i < SEG.length - 2 && t >= SEG[i + 1][0]) i++;
+    const A = KEY[SEG[i][1]], B = KEY[SEG[i][2]], f = clamp((t - SEG[i][0]) / (SEG[i + 1][0] - SEG[i][0]), 0, 1), k = world.weather, o = world.ocean.material.uniforms;
+    for (const n of ['fog', 'zen', 'hor', 'sun', 'deep']) cur[n].copy(A[n]).lerp(B[n], f).lerp(foul[n], k * (n === 'sun' ? 0.8 : 1));
+    let hemiI = lerp(A.hemi, B.hemi, f) * (1 - k * 0.45), sunI = lerp(A.sunI, B.sunI, f) * (1 - k * 0.8), dens = 0.00135 + k * 0.0021;
+    world.night = clamp((1.95 - lerp(A.hemi, B.hemi, f)) / 0.75, 0, 1);
+    if (world.cave) { cur.fog.set(0x0d0c0e); hemiI = 1.5; sunI = 0.35; dens = 0.011; }
+    shared.uFog.value.copy(cur.fog); shared.uZenith.value.copy(cur.zen); shared.uHorizon.value.copy(cur.hor); shared.uSunCol.value.copy(cur.sun); o.uDeep.value.copy(cur.deep);
+    shared.uNight.value = world.night * (1 - k); shared.uLight.value = clamp(hemiI / 2.1, 0.3, 1);
+    scene.fog.color.copy(cur.fog); scene.background.copy(cur.fog); scene.fog.density = dens; o.uFogD.value = dens;
+    hemi.intensity = hemiI; hemi.color.copy(A.sky).lerp(B.sky, f); if (world.cave) hemi.color.set(0xffc890); sun.intensity = sunI; sun.color.copy(cur.sun);
+    // the sun crosses the sky by day; the moon takes over at night
+    const th = (t - 0.25) * TAU, up = Math.sin(th);
+    if (up > -0.08) SUN_DIR.set(-Math.cos(th) * 0.8, Math.max(0.06, up) * 0.9, -0.55).normalize(); else SUN_DIR.set(Math.cos(th) * 0.7, -up * 0.7 + 0.15, 0.5).normalize();
+    sun.position.copy(SUN_DIR).multiplyScalar(100);
+    setGlow(world.cave ? 1 : world.night);
+  }
+  let cullT = 0;
   world.update = (dt, cam) => {
-    world.time += dt; shared.uTime.value = world.time;
+    world.time += dt; shared.uTime.value = world.time; world.tod = (world.tod + dt / 780) % 1;
     world.ocean.position.set(cam.x, 0, cam.z); world.abyss.position.set(cam.x, -13.6, cam.z); world.sky.position.copy(cam);
+    applySky();
+    // far islands are hidden; mid-distance islands drop their trees and buildings
+    cullT -= dt; if (cullT <= 0) { cullT = 0.4; for (const isl of ISLANDS) { const d = Math.hypot(cam.x - isl.x, cam.z - isl.z) - isl.r * 1.5; isl.group.visible = d < 1150; const near = d < 640; for (let i = 1; i < isl.group.children.length; i++) isl.group.children[i].visible = near; } world.ocean.visible = !world.cave; }
   };
   return world;
 }

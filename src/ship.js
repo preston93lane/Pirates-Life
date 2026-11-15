@@ -1,7 +1,7 @@
 // Ship models (lofted hull, masts, sails, guns) and the sailing physics shared by player and AI ships.
 import * as THREE from 'three';
 import { clamp, damp, smooth, waveHeight, wrapAngle } from './util.js';
-import { Mesher, MAT_2S, box, cyl, soup, paint } from './geo.js';
+import { Mesher, box, cyl, cone, soup, paint, boxUV, hullMat } from './geo.js';
 import { heightAt } from './world.js';
 import { staticFigure } from './character.js';
 import { WORLD_R } from './data.js';
@@ -49,71 +49,111 @@ function sailGeo(w, h) {
   return g;
 }
 
+const tri = (pts) => paint(soup(pts), 0xffffff, 0.06);
 export function buildShipModel(cls, style, opts = {}) {
-  const L = cls.len, B = cls.beam, fb = 1.25 + B * 0.13, draft = 0.9 + B * 0.1, deckY = fb - 0.72, S = 14;
-  const hb = (t) => (B / 2) * (t < 0.22 ? 0.66 + 0.34 * smooth(0, 0.22, t) : t < 0.55 ? 1 : 1 - Math.pow((t - 0.55) / 0.45, 1.9));
-  const gy = (t) => fb + (t < 0.4 ? 1.0 * Math.pow((0.4 - t) / 0.4, 2) : 0.8 * Math.pow((t - 0.4) / 0.6, 2));
-  const ring = (t) => { const h = hb(t), k = -draft * (1 - smooth(0.72, 1, t)), g = gy(t); return [[0, k], [h * 0.68, k * 0.55], [h * 0.98, 0.3], [h, g - 0.5], [h, g]]; };
+  const L = cls.len, B = cls.beam, fat = cls.fat || 0, decks = cls.decks || 1, rig = cls.rig || 'square';
+  const fb = 1.25 + B * 0.13 + (decks - 1) * 1.15, draft = 0.9 + B * 0.1, deckY = fb - 0.72, S = 16;
+  const bowT = (cls.sharp ? 0.42 : 0.55) + fat * 0.12, sw = 0.66 + fat * 0.22;
+  const hb = (t) => (B / 2) * (t < 0.22 ? sw + (1 - sw) * smooth(0, 0.22, t) : t < bowT ? 1 : 1 - Math.pow((t - bowT) / (1 - bowT), 1.7 + fat * 1.3));
+  const castle = cls.castle ?? 1.25, fore = cls.fore || 0, qd = L * (castle > 2 ? 0.27 : 0.2), fl = fore ? L * 0.15 : 0;
+  const gy = (t) => fb + (t < 0.4 ? (0.7 + castle * 0.3) * Math.pow((0.4 - t) / 0.4, 2) : (0.8 + fore * 0.35) * Math.pow((t - 0.4) / 0.6, 2));
+  const ring = (t) => { const h = hb(t), k = -draft * (1 - smooth(0.72, 1, t)), g = gy(t); return [[0, k], [h * 0.68, k * 0.55], [h * 0.98, 0.3], [h * (decks > 1 ? 1.03 : 1), g - (decks > 1 ? 1.9 : 1.0)], [h, g - 0.45], [h, g]]; };
   const z = (t) => (t - 0.5) * L;
-  const strips = [[], [], [], []], deck = [];
+  const strips = [[], [], [], [], []], deck = [];
   for (let i = 0; i < S; i++) {
     const t0 = i / S, t1 = (i + 1) / S, a = ring(t0), b = ring(t1), z0 = z(t0), z1 = z(t1);
-    for (let k = 0; k < 4; k++) for (const sx of [1, -1]) {
+    for (let k = 0; k < 5; k++) for (const sx of [1, -1]) {
       const p = [sx * a[k][0], a[k][1], z0], q = [sx * a[k + 1][0], a[k + 1][1], z0], r = [sx * b[k + 1][0], b[k + 1][1], z1], s = [sx * b[k][0], b[k][1], z1];
       strips[k].push(p, q, r, p, r, s);
     }
     const w0 = hb(t0) * 0.985, w1 = hb(t1) * 0.985;
     deck.push([-w0, deckY, z0], [w0, deckY, z0], [w1, deckY, z1], [-w0, deckY, z0], [w1, deckY, z1], [-w1, deckY, z1]);
   }
-  const m = new Mesher(), st = ring(0), tar = 0x1b1816;
+  const m = new Mesher(true), st = ring(0), tar = 0x1b1816, wood = 0x4a3828, dark = 0x3a2e24, lit = 0xffc66e, gold = 0xc79a3a, iron = 0x202224;
   const transom = [];
-  for (let k = 0; k < 4; k++) transom.push([st[k][0], st[k][1], z(0)], [-st[k][0], st[k][1], z(0)], [-st[k + 1][0], st[k + 1][1], z(0)], [st[k][0], st[k][1], z(0)], [-st[k + 1][0], st[k + 1][1], z(0)], [st[k + 1][0], st[k + 1][1], z(0)]);
-  m.add(soup(strips[0]), tar, undefined, undefined, 1, 0.05); m.add(soup(strips[1]), tar, undefined, undefined, 1, 0.08);
-  m.add(soup(strips[2]), style.hull, undefined, undefined, 1, 0.1); m.add(soup(strips[3]), style.trim, undefined, undefined, 1, 0.06);
-  m.add(soup(transom), style.hull, undefined, undefined, 1, 0.08); m.add(soup(deck), 0x93795a, undefined, undefined, 1, 0.09);
-  // quarterdeck, stern windows, lantern, wheel
-  const qd = L * 0.2, qw = B * 0.74;
-  m.add(box(qw, 1.25, qd), 0x80684c, [0, deckY + 0.6, z(0) + qd / 2 + 0.1], [0, 0, 0], 1, 0.08);
-  for (let i = -1; i <= 1; i++) m.add(box(0.7, 0.55, 0.1), 0xffc66e, [i * qw * 0.3, deckY + 0.55, z(0) - 0.03], [0, 0, 0], 1, 0);
-  m.add(box(0.3, 0.5, 0.3), 0xffc66e, [0, gy(0) + 0.9, z(0) + 0.1], [0, 0, 0], 1, 0); m.add(cyl(0.04, 0.04, 0.9, 4), 0x2b2d30, [0, gy(0) + 0.3, z(0) + 0.1]);
-  m.add(cyl(0.5, 0.5, 0.08, 8), 0x4a3828, [0, deckY + 2.0, z(0) + qd * 0.75], [Math.PI / 2, 0, 0]); m.add(box(0.14, 0.9, 0.14), 0x4a3828, [0, deckY + 1.6, z(0) + qd * 0.75 - 0.15]);
-  // bowsprit
-  m.add(cyl(0.1, 0.16, L * 0.3, 5), 0x4a3828, [0, gy(1) + 0.75, z(1) + L * 0.08], [1.2, 0, 0]);
-  // guns
-  const gunZ = [], guns = opts.guns ?? cls.guns;
+  for (let k = 0; k < 5; k++) transom.push([st[k][0], st[k][1], z(0)], [-st[k][0], st[k][1], z(0)], [-st[k + 1][0], st[k + 1][1], z(0)], [st[k][0], st[k][1], z(0)], [-st[k + 1][0], st[k + 1][1], z(0)], [st[k + 1][0], st[k + 1][1], z(0)]);
+  const cols = [style.bottom || tar, tar, style.hull, style.band || style.hull, style.trim];
+  strips.forEach((sp, k) => m.add(soup(sp), cols[k], undefined, undefined, 1, 0.07));
+  m.add(soup(transom), style.hull, undefined, undefined, 1, 0.08); m.add(soup(deck), 0xa58a66, undefined, undefined, 1, 0.07);
+  // stern castle with gallery windows, rails, lanterns and the wheel
+  const qw = B * (0.74 + fat * 0.1), qz = z(0) + qd / 2 + 0.1, top = deckY + castle;
+  m.add(box(qw, castle, qd), 0x80684c, [0, deckY + castle / 2, qz], [0, 0, 0], 1, 0.06);
+  for (let r = 0; r < (castle > 2 ? 2 : 1); r++) for (let i = -2; i <= 2; i++) if (Math.abs(i) < 2 || B > 8) m.add(box(0.62, 0.6, 0.12), lit, [i * qw * 0.2, deckY + 0.55 + r * 1.25, z(0) - 0.04], [0, 0, 0], 1, 0);
+  if (cls.gild) { m.add(box(qw * 1.02, 0.22, 0.2), gold, [0, top + 0.1, z(0) - 0.05]); m.add(box(qw * 1.02, 0.16, 0.2), gold, [0, deckY + 0.05, z(0) - 0.05]); }
+  for (const sx of [-1, 1]) { m.add(box(0.1, 0.1, qd), dark, [sx * qw / 2, top + 0.8, qz]); for (let i = 0; i <= 3; i++) m.add(box(0.1, 0.8, 0.1), dark, [sx * qw / 2, top + 0.4, z(0) + 0.2 + (i / 3) * (qd - 0.3)]); }
+  m.add(box(qw, 0.1, 0.1), dark, [0, top + 0.8, z(0) + qd + 0.05]);
+  const nl = castle > 2 ? 3 : 1; for (let i = 0; i < nl; i++) { const lx = (i - (nl - 1) / 2) * qw * 0.36; m.add(box(0.34, 0.52, 0.34), lit, [lx, top + 1.75, z(0) + 0.1], [0, 0, 0], 1, 0); m.add(cyl(0.04, 0.04, 1.5, 4), iron, [lx, top + 0.75, z(0) + 0.1]); }
+  const hz = z(0) + qd * 0.72;
+  m.add(cyl(0.55, 0.55, 0.08, 8), wood, [0, top + 0.95, hz], [Math.PI / 2, 0, 0]); m.add(box(0.14, 0.95, 0.14), wood, [0, top + 0.48, hz - 0.15]);
+  for (const sx of [-1, 1]) m.add(box(0.9, 0.16, castle * 1.3 + 0.4), 0x80684c, [sx * qw * 0.3, deckY + castle * 0.5, z(0) + qd + castle * 0.55], [-0.72, 0, 0]); // stairs
+  // forecastle
+  if (fore) { m.add(box(B * 0.62, fore, fl), 0x80684c, [0, deckY + fore / 2, z(1) - fl * 0.72], [0, 0, 0], 1, 0.06); m.add(box(B * 0.62, 0.1, 0.1), dark, [0, deckY + fore + 0.7, z(1) - fl * 1.2]); }
+  // bowsprit, beak, figurehead, anchors
+  m.add(cyl(0.1, 0.17, L * 0.3, 5), wood, [0, gy(1) + 0.75, z(1) + L * 0.08], [1.2, 0, 0]);
+  if (cls.beak) m.add(box(0.5, 0.35, L * 0.16), style.trim, [0, gy(1) - 0.2, z(1) + L * 0.06], [-0.18, 0, 0]);
+  if (cls.gild) m.add(cone(0.34, 1.5, 5), gold, [0, gy(1) - 0.1, z(1) + 0.5], [1.9, 0, 0]);
+  for (const sx of [-1, 1]) { m.add(box(0.12, 1.1, 0.12), iron, [sx * hb(0.86) * 1.04, gy(0.86) - 0.7, z(0.86)]); m.add(box(0.12, 0.12, 0.8), iron, [sx * hb(0.86) * 1.04, gy(0.86) - 1.25, z(0.86)]); }
+  // deck furniture: hatch grating, capstan, ship's boat
+  m.add(box(B * 0.28, 0.16, L * 0.1), 0x2a211a, [0, deckY + 0.08, z(0.47)]); m.add(cyl(0.42, 0.5, 0.8, 8), wood, [0, deckY + 0.4, z(0.62)]); m.add(cyl(0.6, 0.6, 0.1, 8), dark, [0, deckY + 0.85, z(0.62)]);
+  if (L > 28) { m.add(box(1.5, 0.5, 4), 0x6a5238, [B * 0.16, deckY + 0.45, z(0.38)]); m.add(box(1.1, 0.12, 3.5), dark, [B * 0.16, deckY + 0.72, z(0.38)]); }
+  // guns: an open battery on deck, and a lower gun deck on the biggest ships
+  const gunZ = [], guns = opts.guns ?? cls.guns, top0 = fore ? 0.8 - 0.15 : 0.74, per = decks > 1 ? Math.ceil(guns / 2) : guns;
   for (let i = 0; i < guns; i++) {
-    const t = 0.3 + (guns === 1 ? 0.2 : (i / (guns - 1)) * 0.42), gz = z(t), w = hb(t); gunZ.push({ z: gz, x: w });
-    for (const sx of [1, -1]) { m.add(cyl(0.13, 0.18, 1.3, 6), 0x202224, [sx * (w - 0.1), deckY + 0.5, gz], [0, 0, sx * -Math.PI / 2]); m.add(box(0.7, 0.3, 0.6), 0x4a3828, [sx * (w - 0.7), deckY + 0.22, gz]); }
+    const low = decks > 1 && i >= per, n = low ? guns - per : per, j = low ? i - per : i;
+    const t = 0.3 + (n === 1 ? 0.2 : (j / (n - 1)) * (top0 - 0.3)) + (low ? 0.02 : 0), gz = z(t), w = hb(t), y = low ? deckY - 0.75 : deckY + 0.5;
+    gunZ.push({ z: gz, x: w });
+    for (const sx of [1, -1]) {
+      m.add(cyl(0.13, 0.19, low ? 0.9 : 1.3, 6), iron, [sx * (w + (low ? 0.3 : -0.1)), y, gz], [0, 0, sx * -Math.PI / 2]);
+      if (low) m.add(box(0.1, 0.5, 0.6), style.trim, [sx * (w + 0.06), y + 0.5, gz], [0, 0, sx * 0.5]); else m.add(box(0.7, 0.3, 0.6), wood, [sx * (w - 0.7), deckY + 0.22, gz]);
+    }
   }
-  // masts, yards, shrouds
-  const mastT = cls.masts === 1 ? [0.56] : cls.masts === 2 ? [0.38, 0.69] : [0.25, 0.5, 0.75];
-  const sails = [], mastTop = [];
+  // masts and rig
+  const nm = cls.masts, mastT = nm === 1 ? [0.56] : nm === 2 ? [0.38, 0.69] : [0.27, 0.51, 0.76];
+  const sailDefs = [], mastTop = [], rake = cls.rake || 0;
   mastT.forEach((t, i) => {
-    const mid = i === Math.floor(mastT.length / 2) || cls.masts === 1, h = L * (mid ? 0.98 : 0.84) + 2, mz = z(t);
-    m.add(cyl(0.11, 0.24, h, 6), 0x4a3828, [0, deckY + h / 2, mz]); mastTop.push([0, deckY + h, mz]);
-    m.add(cyl(0.5, 0.42, 0.3, 7), 0x3a2e24, [0, deckY + h * 0.62, mz]);
-    const w1 = B * 1.5, h1 = h * 0.4, w2 = B * 1.15, h2 = h * 0.27, y1 = deckY + h * 0.58, y2 = deckY + h * 0.92;
-    for (const [w, y] of [[w1, y1], [w2, y2]]) m.add(cyl(0.07, 0.07, w * 1.04, 5), 0x3a2e24, [0, y, mz + 0.3], [0, 0, Math.PI / 2]);
-    sails.push({ w: w1, h: h1, y: y1 - 0.1, z: mz + 0.36 }, { w: w2, h: h2, y: y2 - 0.1, z: mz + 0.36 });
-    for (const sx of [1, -1]) m.add(soup([[0, deckY + h * 0.6, mz], [sx * hb(t), gy(t), mz - 1.4], [sx * hb(t), gy(t), mz - 0.2]]), 0x1c1917);
+    const mid = i === Math.floor(nm / 2) || nm === 1, mz = z(t), base = t < 0.22 ? top : deckY;
+    const h = (rig === 'lateen' ? L * 0.62 : rig === 'gaff' ? L * (mid ? 0.95 : 0.86) : L * (mid ? 0.98 : 0.84)) * (cls.tall || 1) + 2;
+    m.add(cyl(0.11, 0.25, h, 6), wood, [0, base + h / 2, mz - Math.sin(rake) * h / 2], [-rake, 0, 0]);
+    const tz = mz - Math.sin(rake) * h; mastTop.push([0, base + h, tz]);
+    for (const sx of [1, -1]) { for (const dz of [-1.5, -0.6, 0.3]) m.add(soup([[0, base + h * 0.62, mz], [sx * hb(t), gy(t), mz + dz], [sx * hb(t), gy(t), mz + dz + 0.14]]), 0x1c1917); }
+    m.add(box(0.06, 0.5, 1.6), style.trim, [0, base + h + 0.3, tz - 0.8]); // pennant
+    if (rig === 'square') {
+      m.add(cyl(0.55, 0.45, 0.3, 7), dark, [0, base + h * 0.62, mz]);
+      const rows = cls.tall ? [[1.5, 0.36, 0.52], [1.2, 0.26, 0.8], [0.85, 0.16, 0.985]] : [[1.5, 0.4, 0.58], [1.15, 0.27, 0.92]];
+      for (const [wk, hk, yk] of rows) { const w = B * wk, y = base + h * yk; m.add(cyl(0.07, 0.07, w * 1.04, 5), dark, [0, y, mz + 0.3], [0, 0, Math.PI / 2]); sailDefs.push({ geo: sailGeo(w, h * hk), x: 0, y: y - 0.1, z: mz + 0.36, ry: 0 }); }
+    } else if (rig === 'gaff') {
+      const bl = L * 0.3, yb = 1.6, yt = h * 0.7, pk = h * 0.2; // boom length, heights above the base
+      m.add(cyl(0.08, 0.1, bl, 5), dark, [0, base + yb, mz - bl / 2], [Math.PI / 2, 0, 0]); m.add(cyl(0.06, 0.08, bl * 0.8, 5), dark, [0, base + yt + pk / 2, mz - bl * 0.36], [Math.PI / 2 - 0.35, 0, 0]);
+      sailDefs.push({ geo: tri([[0, 0, 0], [0, yb - yt, 0], [0, yb - yt, -bl * 0.96], [0, 0, 0], [0, yb - yt, -bl * 0.96], [0, pk, -bl * 0.74]]), x: 0, y: base + yt, z: mz - 0.1, ry: 0.3 });
+      sailDefs.push({ geo: tri([[0, 0, 0], [0, -h * 0.24, 0], [0, -h * 0.22 + pk, -bl * 0.7]]), x: 0, y: base + h * 0.97, z: mz - 0.1, ry: 0.3 });
+    } else {
+      const yl = L * 0.5; // lateen yard: low forward, high aft
+      m.add(cyl(0.06, 0.09, yl * 1.5, 5), dark, [0, base + h * 0.78, mz - yl * 0.12], [Math.PI / 2 - 0.62, 0, 0]);
+      sailDefs.push({ geo: tri([[0, -h * 0.38, yl * 0.5], [0, h * 0.36, -yl * 0.72], [0, -h * 0.66, -yl * 0.5]]), x: 0, y: base + h * 0.78, z: mz - yl * 0.12, ry: 0.3 });
+    }
   });
-  const hullMesh = new THREE.Mesh(m.build(), style === STYLES.ghost ? GHOST_MAT : MAT_2S);
+  const hullGeo = m.build(); boxUV(hullGeo, 1 / 3.2, true);
+  const hullMesh = new THREE.Mesh(hullGeo, style === STYLES.ghost ? GHOST_MAT : hullMat());
   const group = new THREE.Group(); group.rotation.order = 'YXZ'; group.add(hullMesh);
-  const sailMat = new THREE.MeshLambertMaterial({ color: style.sail, vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: true, opacity: style === STYLES.ghost ? 0.75 : 1, emissive: style === STYLES.ghost ? 0x1d5446 : 0 });
-  const sailMeshes = sails.map((s) => { const sm = new THREE.Mesh(sailGeo(s.w, s.h), sailMat); sm.position.set(0, s.y, s.z); sm.renderOrder = 2; group.add(sm); return sm; });
-  // jib
-  const fm = mastTop[mastTop.length - 1], jib = new THREE.Mesh(paint(soup([[0, fm[1] * 0.86, fm[2] + 0.3], [0.5, gy(1) + 1.6, z(1) + L * 0.17], [0.2, deckY + 2.2, fm[2] + 1.2]]), 0xffffff, 0), sailMat);
-  group.add(jib);
+  const ghost = style === STYLES.ghost;
+  const sailMat = new THREE.MeshLambertMaterial({ color: style.sail, vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: true, opacity: ghost ? 0.75 : 1, emissive: ghost ? 0x1d5446 : 0 });
+  const sailMeshes = sailDefs.map((s) => { const sm = new THREE.Mesh(s.geo, sailMat); sm.position.set(s.x, s.y, s.z); sm.rotation.y = s.ry; sm.renderOrder = 2; group.add(sm); return sm; });
+  // headsails
+  const fm = mastTop[mastTop.length - 1], bs = [0.3, gy(1) + 1.7, z(1) + L * 0.19], jg = [[0, fm[1] * 0.86, fm[2] + 0.3], bs, [0.2, deckY + 2.2, fm[2] + 1.2]];
+  if (rig !== 'lateen' && L > 24) jg.push([0, fm[1] * 0.66, fm[2] + 0.3], [0.2, gy(1) + 1.2, z(1) + L * 0.08], [0.2, deckY + 2.1, fm[2] + 2.4]);
+  const jib = new THREE.Mesh(tri(jg), sailMat); jib.renderOrder = 2; group.add(jib);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2).translate(-1.7, 0, 0), new THREE.MeshLambertMaterial({ map: flagTexture(opts.flag || FACTION_FLAG[opts.faction] || 'white', opts.jolly), side: THREE.DoubleSide }));
-  jib.renderOrder = 2;
-  const top = mastTop[Math.floor(mastTop.length / 2)]; flag.position.set(0, top[1] - 1.2, top[2]); flag.rotation.y = Math.PI / 2; group.add(flag);
+  const ft = mastTop[Math.floor(mastTop.length / 2)]; flag.position.set(0, ft[1] - 1.2, ft[2]); flag.rotation.y = Math.PI / 2; group.add(flag);
   if (opts.crew !== false) {
+    const mine = opts.faction === 'player' || !opts.faction;
     const looks = { player: ['crew', 'crew'], pirate: ['brigand', 'brigand'], merchant: ['crew', 'wright'], navy: ['soldier', 'soldier'], ghost: ['skeleton', 'skeleton'] }[opts.faction || 'player'];
-    looks.forEach((lk, i) => { const f = staticFigure(lk); f.position.set((i ? 1 : -1) * B * 0.22, deckY, z(0.45 + i * 0.22)); f.rotation.y = i ? 1.2 : -1.5; group.add(f); });
-    const helm = staticFigure(opts.faction === 'player' || !opts.faction ? 'player' : looks[0]); helm.position.set(0, deckY + 1.22, z(0) + qd * 0.75 - 0.75); group.add(helm);
-    if (opts.faction === 'player' || !opts.faction) group.userData.helm = helm;
+    looks.forEach((lk, i) => { const f = staticFigure(lk); f.position.set((i ? 1 : -1) * B * 0.26, deckY, z(0.42 + i * 0.24)); f.rotation.y = i ? 1.2 : -1.5; group.add(f); if (mine) (group.userData.hands = group.userData.hands || []).push(f); });
+    const helm = staticFigure(mine ? 'player' : looks[0]); helm.position.set(0, top, hz - 0.75); group.add(helm);
+    if (mine) group.userData.helm = helm;
   }
-  return { group, sailMeshes, jib, flag, sailMat, gunZ, deckY, fb, hb, L, B };
+  // where people can walk: the open deck between the stern castle and the forecastle
+  const walk = { z0: z(0) + qd + 0.5, z1: Math.min(z(0.9), z(1) - fl * 1.25 - 0.3) };
+  return { group, sailMeshes, jib, flag, sailMat, gunZ, deckY, fb, hb, L, B, walk, helmAt: { x: 0, y: top, z: hz - 0.75 }, top };
 }
 
 export class Ship {

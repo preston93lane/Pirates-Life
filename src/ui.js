@@ -1,6 +1,6 @@
 // HUD and menus. Plain DOM over the canvas.
 import * as THREE from 'three';
-import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES } from './data.js';
+import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB } from './data.js';
 import { createMap } from './map.js';
 import { flagTexture } from './ship.js';
 import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave } from './state.js';
@@ -18,6 +18,7 @@ const ICON = {
   gun: '<path d="M2 8h15l3 1v3h-9l-1.5 2.5H7L5.5 19H2.5L4 13H2z"/>',
   ball: '<circle cx="12" cy="12" r="6.5"/><path d="M8.5 9.5a4.5 4.5 0 0 1 3-1.6"/>', aim: '<circle cx="12" cy="12" r="6"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
   quest: '<path d="M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h3"/>', person: '<circle cx="12" cy="7" r="4"/><path d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7"/>', ship: '<path d="M3 16h18l-2.5 5h-13zM12 16V3M12 4l6 9h-6M12 6l-5 7h5"/>', crew: '<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20c0-3.5 2.5-6 6-6s6 2.5 6 6M15 14.5c3.5-.5 7 1.5 7 5.5"/>', paw: '<circle cx="7" cy="9" r="1.8"/><circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9" r="1.8"/><path d="M7.5 17c0-3 2-5 4.5-5s4.5 2 4.5 5c0 2-2 2.5-4.5 2.5S7.5 19 7.5 17z"/>', scales: '<path d="M12 3v18M6 21h12M4 7h16M4 7l-2.5 6a3 3 0 0 0 5 0zM20 7l-2.5 6a3 3 0 0 0 5 0z"/>', flag: '<path d="M5 21V3M5 4h13l-3 4.5 3 4.5H5"/>', friends: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-4 3-6.5 7-6.5s7 2.5 7 6.5M17 5.5a3 3 0 0 1 0 5.5M19 14.5c2 .8 3 2.6 3 5.5"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>', map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/>',
+  whirl: '<path d="M12 4a8 8 0 1 1-7.5 5.2M4 4v5.5h5.5"/><path d="M12 9v6"/>',
   rum: '<path d="M10 2h4v4l2 3v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3z"/><path d="M8 13h8"/>',
   anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v13M5 13c0 4 3 7 7 7s7-3 7-7M8.5 11h7"/>',
   board: '<path d="M4 20L20 4M14 4h6v6M4 9l4 4M9 4l4 4"/>', talk: '<path d="M4 5h16v10H10l-5 4v-4H4z"/>',
@@ -32,7 +33,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export function createUI(game) {
   const ui = { dirty: true, panel: null, floats: [], miniT: 0, hintT: 0 };
-  const el = {}; ['hud', 'hpFill', 'hpText', 'pGold', 'pTimber', 'pIron', 'pHold', 'wanted', 'qTitle', 'qText', 'target', 'tName', 'tFill', 'toasts', 'mini', 'place', 'btnMenu', 'btnMute', 'seaBtns', 'landBtns', 'bFire', 'bShoot', 'bDodge', 'rumN', 'sailPips', 'speed', 'rlP', 'rlS', 'ctx', 'hint', 'floats', 'flash', 'banner', 'panel', 'title', 'fade', 'btnContinue', 'btnNew', 'bAmmo', 'ammoN', 'bSwivel', 'quest'].forEach((k) => { el[k] = $(k); });
+  const el = {}; ['hud', 'hpFill', 'hpText', 'pGold', 'pTimber', 'pIron', 'pHold', 'wanted', 'qTitle', 'qText', 'target', 'tName', 'tFill', 'toasts', 'mini', 'place', 'btnMenu', 'btnMute', 'seaBtns', 'landBtns', 'bFire', 'bShoot', 'bDodge', 'rumN', 'sailPips', 'speed', 'rlP', 'rlS', 'ctx', 'hint', 'floats', 'flash', 'banner', 'panel', 'title', 'fade', 'btnContinue', 'btnNew', 'bAmmo', 'ammoN', 'bSwivel', 'quest', 'bSkill', 'bombN'].forEach((k) => { el[k] = $(k); });
   for (const s of document.querySelectorAll('[data-icon]')) s.innerHTML = svg(s.dataset.icon);
   el.pGold.dataset.l = 'Gold'; el.pTimber.dataset.l = 'Timber'; el.pIron.dataset.l = 'Iron'; el.pHold.dataset.l = 'Hold';
   const S = () => game.save, mctx = el.mini.getContext('2d'), v3 = new THREE.Vector3();
@@ -65,9 +66,9 @@ export function createUI(game) {
   ui.update = (dt) => {
     const s = S(), mode = game.mode, sea = game.sea, land = game.land, onFoot = mode !== 'sea';
     el.seaBtns.hidden = onFoot; el.landBtns.hidden = !onFoot;
-    const hp = onFoot ? land.player.hp : sea.player.hp, max = onFoot ? land.player.maxHp : sea.player.maxHp;
-    el.hpFill.style.transform = `scaleX(${clamp(hp / max, 0, 1)})`; el.hpFill.parentElement.classList.toggle('ship', !onFoot);
-    el.hpText.textContent = `${onFoot ? '' : 'HULL '}${Math.ceil(hp)} / ${max}`;
+    const hull = mode === 'sea' || mode === 'deck', hp = hull ? sea.player.hp : land.player.hp, max = hull ? sea.player.maxHp : land.player.maxHp;
+    el.hpFill.style.transform = `scaleX(${clamp(hp / max, 0, 1)})`; el.hpFill.parentElement.classList.toggle('ship', hull);
+    el.hpText.textContent = `${hull ? 'HULL ' : ''}${Math.ceil(hp)} / ${max}`;
     el.pGold.textContent = s.gold; el.pTimber.textContent = s.timber; el.pIron.textContent = s.iron; el.pHold.textContent = `${cargoUsed(s)}/${sea.player.stats.cargo}`;
     el.wanted.hidden = !isWanted(s); el.wanted.textContent = s.rep.navy <= -60 ? 'HUNTED' : 'WANTED';
     if (ui.dirty) { const o = game.quests.objective(); el.qTitle.textContent = o.title; el.qText.textContent = o.short; ui.dirty = false; }
@@ -86,7 +87,7 @@ export function createUI(game) {
       const p = land.player, st = playerStats(s);
       el.bShoot.classList.toggle('cool', p.gunT > 0); el.bShoot.style.setProperty('--cd', clamp(p.gunT / st.gunReload, 0, 1));
       el.bDodge.classList.toggle('cool', p.cdRoll > 0); el.bDodge.style.setProperty('--cd', clamp(p.cdRoll / 0.85, 0, 1));
-      el.rumN.textContent = s.rum;
+      el.rumN.textContent = s.rum; el.bombN.textContent = s.bombs; el.bSkill.classList.toggle('cool', p.cdWhirl > 0); el.bSkill.style.setProperty('--cd', clamp((p.cdWhirl || 0) / 7, 0, 1));
     }
     // context button
     const c = game.ctx;
@@ -119,7 +120,8 @@ export function createUI(game) {
     } else {
       for (const a of game.land.actors) if (a.alive && a.state !== 'buried') dot(a.x, a.z, 4.5, a.team ? '#e0524a' : '#6fae84');
       const isl = game.land.isl;
-      if (isl) { dot(isl.boat.x, isl.boat.z, 6, '#7fd0d6'); for (const n of isl.npcs) dot(n.x, n.z, 4.5, '#e9c46a'); }
+      for (const q of game.land.pois) if (q.seen && !q.done) dot(q.x, q.z, 5, '#fff2a8');
+      if (isl && !game.land.cave) { dot(isl.boat.x, isl.boat.z, 6, '#7fd0d6'); for (const n of isl.npcs) dot(n.x, n.z, 4.5, '#e9c46a'); }
     }
     const h = onFoot ? me.face : me.heading, sx = Math.sin(h), cz = Math.cos(h), a = 11 / k;
     c.fillStyle = '#fff'; c.beginPath(); c.moveTo(me.x + sx * a, me.z + cz * a); c.lineTo(me.x - sx * a * 0.7 + cz * a * 0.6, me.z - cz * a * 0.7 - sx * a * 0.6); c.lineTo(me.x - sx * a * 0.7 - cz * a * 0.6, me.z - cz * a * 0.7 + sx * a * 0.6); c.fill();
@@ -134,8 +136,8 @@ export function createUI(game) {
     c.fillStyle = '#e6dcc2'; c.font = '700 20px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText('N', Z / 2, 24);
     // place name
     let name = 'Open sea';
-    if (game.mode === 'board') name = 'Boarding';
-    else if (onFoot) name = game.land.isl.name;
+    if (game.mode === 'board') name = 'Boarding'; else if (game.mode === 'deck') name = 'On deck'; else if (game.land.cave) name = 'Cave';
+    else if (onFoot && game.land.isl) name = game.land.isl.name;
     else { const n = nearestIsland(me.x, me.z); if (n.d < 220 && S().seen[n.isl.id]) name = n.isl.name; else if (sea.zone) name = ZONES[sea.zone].name; }
     el.place.textContent = name;
   }
@@ -192,7 +194,7 @@ export function createUI(game) {
         return Object.entries(SHIP_CLASSES).map(([k, c]) => {
           const owned = !!s.owned[k], cur = s.ship.cls === k, locked = s.level < c.level;
           const right = cur ? '<span class="cost">Your ship</span>' : owned ? btn('Sail her', 'switch', k, 'go') : locked ? `<span class="cost no">Rank ${c.level} needed</span>` : `${costHtml({ gold: c.price })}${btn('Buy', 'buyship', k, 'go', s.gold < c.price)}`;
-          return row(c.name, `${c.guns} guns a side · hull ${c.hp} · ${(c.speed * 1.2).toFixed(0)} kn · hold ${c.cargo} · ${c.crew} boarders`, right);
+          return row(`${c.name} · ${c.role}`, `${c.guns} guns a side · hull ${c.hp} · ${(c.speed * 1.2).toFixed(0)} kn · hold ${c.cargo} · ${c.crew} boarders`, right);
         }).join('') + '<p class="note" style="margin-top:12px">Upgrades stay with the hull they were fitted to.</p>';
       },
       Colours() { const s = S(); return `<p>Choose your sailcloth. Purely for show.</p><div class="swatches">${Object.entries(SAIL_COLORS).map(([k, c]) => `<button type="button" data-do="sail" data-arg="${k}" class="${s.ship.sail === k ? 'on' : ''}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="${k} sails"></button>`).join('')}</div>`; },
@@ -200,7 +202,7 @@ export function createUI(game) {
     smith: {
       tabs: ['Blades', 'Firearms'],
       Blades() { const s = S(); return SWORDS.map((w, i) => row(w.name, `${w.dmg} damage a stroke`, i === s.sword ? '<span class="cost">In hand</span>' : i < s.sword ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Forge', 'sword', i, '', !can(s, w))}`)).join(''); },
-      Firearms() { const s = S(); return GUNS.map((w, i) => row(w.name, `${w.dmg} damage · ${w.reload.toFixed(1)}s reload`, i === s.gun ? '<span class="cost">In hand</span>' : i < s.gun ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Buy', 'gun', i, '', !can(s, w))}`)).join(''); },
+      Firearms() { const s = S(); return row(`${BOMB.name} (you carry ${s.bombs} of ${BOMB.max})`, BOMB.desc, `${costHtml(BOMB)}${btn('Buy', 'flask', '', 'go', s.gold < BOMB.gold || s.bombs >= BOMB.max)}`) + GUNS.map((w, i) => row(w.name, `${w.dmg} damage · ${w.reload.toFixed(1)}s reload`, i === s.gun ? '<span class="cost">In hand</span>' : i < s.gun ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Buy', 'gun', i, '', !can(s, w))}`)).join(''); },
     },
     market: {
       tabs: [],
@@ -288,13 +290,14 @@ export function createUI(game) {
       Help() {
         return '<h3>At sea</h3><p>Steer with the left thumb. SAIL and REEF set your speed. FIRE shoots the side facing your target, so turn until she sits off your beam. On open water at full sail the trade winds speed you up.</p>'
           + '<h3>Taking ships</h3><p><b>Sink</b> for the most infamy and little loot. <b>Board</b> (hull under 42%, pull alongside) for all the loot. Break their nerve and they <b>surrender</b>: fire shot and your black flag help. Chain shot stops runners. Hooks board from range.</p>'
-          + '<h3>On foot</h3><p>STRIKE chains three blows. Hold BLOCK just before a hit to parry and stagger. A red mark means block or parry; an orange mark means DODGE. SHOOT is one strong shot on a long reload. Rum heals.</p>'
+          + '<h3>On foot</h3><p>STRIKE chains three blows. WHIRL spins and cuts everyone around you. Powder flasks burst on a group. Hold BLOCK just before a hit to parry and stagger. A red mark means block or parry; an orange mark means DODGE. SHOOT is one strong shot on a long reload. Rum heals.</p>'
           + '<h3>Getting richer</h3><p>Story chapters and tavern jobs pay best early. Buy goods where they are cheap and sell where they are dear (tap a port on the chart). Build the hideout: it earns while you are away. Daily orders, deeds and bounties never run out.</p>'
           + '<h3>Staying alive</h3><p>Watch your standing in Factions. A Wanted captain is attacked by the navy; a Hunted one is chased by ships that outgun him. Bribe a clerk, do navy jobs, or fly false colours.</p>';
       },
       Settings(p) {
         const g = S().gfx, code = p.backup ? exportSave(S()) : '';
-        return row('Sound', 'Cannon, steel and surf.', btn(S().muted ? 'Turn on' : 'Turn off', 'mute'))
+        return row('Sound', 'Everything: cannon, steel, surf and music.', btn(S().muted ? 'Turn on' : 'Turn off', 'mute'))
+          + row('Music', 'Fiddle and drum. Changes for sailing, towns, night and battle.', btn(S().music === false ? 'Turn on' : 'Turn off', 'music'))
           + row('Graphics', { auto: 'Auto: lowers sharpness by itself if the phone struggles.', low: 'Low: fastest. Softer picture, fewer particles.', high: 'High: sharpest picture, always.' }[g], btn({ auto: 'Auto', low: 'Low', high: 'High' }[g], 'gfx'))
           + row('Start over', 'Erases this voyage for good.', p.confirm ? `${btn('Yes, erase', 'wipe', '', 'bad')}${btn('Keep', 'nowipe')}` : btn('New voyage', 'askwipe', '', 'bad'))
           + `<h3>Backup</h3><p>Your voyage lives on this device only. A backup code lets you keep it safe or move it to another device.</p>${p.backup ? `<textarea id="backupOut" class="code" rows="3" readonly>${code}</textarea><p>${btn('Copy code', 'copy', '', 'go')}</p>` : `<p>${btn('Show my backup code', 'backup')}</p>`}<textarea id="backupIn" class="code" rows="2" placeholder="Paste a backup code here to restore it"></textarea><p>${btn('Restore from code', 'restore', '', 'bad')}</p>`
@@ -333,6 +336,7 @@ export function createUI(game) {
     accept(i, p) { const err = game.quests.accept(p.isl.id, +i); if (err) ui.toast(err, 'warn'); else audio.good(); },
     abandon(id) { game.quests.abandon(id); },
     rum() { if (pay(S(), { gold: 30 })) { S().rum++; audio.coin(); } },
+    flask() { const s = S(); if (s.bombs < BOMB.max && pay(s, BOMB)) { s.bombs++; audio.coin(); } },
     chart() { const s = S(); if (pay(s, { gold: 220 })) { const isl = ISLANDS.filter((i) => i.kind !== 'hideout')[Math.floor(Math.random() * 8)]; s.maps.push({ island: isl.id, spot: Math.random() < 0.5 ? 0 : 1, tier: 2 }); audio.coin(); ui.toast(`The chart shows ${isl.name}. See Maps in your log.`, 'gold'); } },
     bribe() { const s = S(); if (pay(s, { gold: bribeCost(s) })) { s.rep.navy = -15; audio.coin(); ui.toast('The clerk loses some paperwork. The navy cools toward you.', 'gold'); } },
     ransom(i, p) { const s = S(), h = s.hostages[+i], d = ransomDeal(p.isl.id, h); s.hostages.splice(+i, 1); s.gold += d.gold; game.emit('ransom', {}); for (const f in d.rep) addRep(s, f, d.rep[f]); audio.coin(); ui.toast(`${d.gold} gold for the captain of the ${h.from}.`, 'gold'); },
@@ -362,6 +366,7 @@ export function createUI(game) {
     login() { game.quests.claimLogin(); }, daily(i) { game.quests.claimDaily(+i); }, bonus() { game.quests.claimBonus(); }, deed(id) { game.quests.claimDeed(id); },
     bounty(id, p) { const err = game.quests.takeBounty(id, p.isl.id); if (err) ui.toast(err, 'warn'); else { audio.good(); ui.toast('Poster taken. Your compass points to where she was last seen.', 'gold'); } },
     dropbounty() { S().bounty = null; },
+    music() { const s = S(); s.music = s.music === false; audio.setMusic(s.music); },
     gfx() { const o = ['auto', 'low', 'high']; game.setGfx(o[(o.indexOf(S().gfx) + 1) % 3]); },
     backup(_, p) { p.backup = true; },
     copy() { const t = $('backupOut'); if (!t) return; const done = () => ui.toast('Backup code copied. Keep it somewhere safe.', 'gold'); try { navigator.clipboard.writeText(t.value).then(done, () => { t.select(); ui.toast('Select the code and copy it.', 'dim'); }); } catch (e) { t.select(); ui.toast('Select the code and copy it.', 'dim'); } },
