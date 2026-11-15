@@ -433,3 +433,13 @@ particles and sharpness.
 - **Command** (Menu, or the CREW button at sea): stations (even, sails, guns, damage parties) and orders (fire at will, double-shot, brace, lighten ship, rum ration, share plunder).
 - **Single guns.** While walking the deck, stand at any cannon and man it: aim, set range, fire. Each gun has its own reload keyed by side and index, which is the hook for one player per gun in multiplayer.
 - **Light.** Nights are brighter. The captain carries a torch in caves and after dark. Caves are lit warm.
+
+## 14. Bosses, tavern games, skills, supplies (build 0.6)
+
+- **Berths by hull.** Cutter 3, Sloop 4, Fluyt 5, Brig 6, Schooner 6, Xebec 8, Brigantine 8, Clipper 9, Galleon 10, Frigate 11, East Indiaman 12, Man-o'-War 16. Berth upgrades, Crew Quarters, Leadership and Born Leader add more.
+- **Poseidon.** Rises in Poseidon's Throne (south-west). Lightning strikes telegraphed by a red ring; every fourth attack is a surge that shoves the ship back. First kill grants a permanent 8% speed. Returns after 20 minutes.
+- **The Pale Lantern.** A ghost brig that only sails at night and fades at dawn. The Drowned Queen remains the ghost boss of the Reach.
+- **Tavern games** (Games tab): Liar's Dice, Twenty-One, Crown and Anchor, arm wrestling. Stakes of 10, 50 or 250 gold. Gold only, never real money.
+- **Skills and feats.** 2 points per rank. Seven skills, five steps each, each step a fixed bonus. Three steps in a skill opens its feat (3 points).
+- **Supplies.** Food, water and limes are used while sailing, scaled by crew size. Empty stores cut morale; no limes for a few minutes brings scurvy. Morale at zero is a mutiny: half the hands leave with some gold. One tap at any tavern bar refills.
+- **Costs.** Hull repair scales with ship price and fitted upgrades. Special shot is fitted once (dear), then bought by the keg (cheap); each gun fired uses one.

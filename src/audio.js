@@ -1,7 +1,7 @@
 // All sound is synthesised with WebAudio: no audio files to download.
 let ctx = null, master = null, noise = null, amb = null;
 
-function env(g, t, a, peak, d) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+function env(g, t, a, peak, d) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
 function burst({ type = 'lowpass', f0 = 800, f1 = 200, q = 0.7, dur = 0.4, vol = 0.5, attack = 0.005 }) {
   const t = ctx.currentTime, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
   src.buffer = noise; src.playbackRate.value = 0.7 + Math.random() * 0.6; f.type = type; f.Q.value = q;

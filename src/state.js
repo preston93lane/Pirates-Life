@@ -1,5 +1,5 @@
 // Player save data, derived stats and the economy. No rendering in here.
-import { HANDS, GRADES, HAND_NAMES, HAND_NICK, STATIONS, LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_CAP_HOURS, GOODS, PORT_PRICES, xpFor, RANKS } from './data.js';
+import { SKILLS, FEATS, FEAT_COST, STORES, HANDS, GRADES, HAND_NAMES, HAND_NICK, STATIONS, LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_CAP_HOURS, GOODS, PORT_PRICES, xpFor, RANKS } from './data.js';
 
 const KEY = 'pirates-life-save-v1';
 
@@ -16,14 +16,20 @@ export function crewBonus(s) {
   b.speed = Math.min(0.3, b.speed); b.dmg = Math.min(0.6, b.dmg); b.reload = Math.min(0.3, b.reload); b.keep = Math.min(0.75, b.keep);
   return b;
 }
+export const sk = (s, id) => (s.skills && s.skills[id]) || 0;
+export const feat = (s, id) => !!(s.feats && s.feats[id]);
+export const skillPoints = (s) => (s.level - 1) * 2 - Object.values(s.skills).reduce((a, b) => a + b, 0) - Object.keys(s.feats).length * FEAT_COST;
+export const storesFull = (s) => { const n = s.crew.length + 1, out = {}; for (const k in STORES) out[k] = n * STORES[k].per; return out; };
+export const storesCost = (s) => { const f = storesFull(s); let g = 0; for (const k in STORES) g += Math.max(0, Math.ceil(f[k] - s[k])) * STORES[k].gold; return g; };
 export const hireCost = (o) => Math.round(HANDS[o.role].gold * GRADES[o.g].cost);
-export function addMorale(s, d) { if (d < 0) d *= 1 - crewBonus(s).keep; s.morale = Math.max(0, Math.min(100, (s.morale ?? 70) + d)); }
+export function addMorale(s, d) { if (d < 0) d *= (1 - crewBonus(s).keep) * (1 - 0.08 * sk(s, 'lead')); s.morale = Math.max(0, Math.min(100, (s.morale ?? 70) + d)); }
 export const moraleWord = (m) => (m < 20 ? 'Mutinous' : m < 40 ? 'Grumbling' : m < 65 ? 'Steady' : m < 85 ? 'Keen' : 'Roaring');
 function fix(s) { // keep older saves working as the game grows
   for (const k in s.owned) s.owned[k] = Object.assign(freshUps(), s.owned[k]);
   s.owned[s.ship.cls] = s.ship.up = Object.assign(freshUps(), s.ship.up || s.owned[s.ship.cls]);
   if (!Array.isArray(s.crew)) { const c = SHIP_CLASSES[s.ship.cls], n = s.old ? c.crew + Math.floor(s.ship.up.crew / 2) + ((s.base.b || {}).quarters || 0) : 1; s.crew = []; for (let i = 0; i < n; i++) { const h = makeHand('deckhand', s.old ? 1 : 0); h.ashore = i < 2; s.crew.push(h); } }
   delete s.old; if (!STATIONS[s.station]) s.station = 'even';
+  for (const k in s.armory) if (s.armory[k] && s.ammo[k] === undefined) s.ammo[k] = 30;
   return s;
 }
 export function newSave() {
@@ -32,6 +38,7 @@ export function newSave() {
     ship: { cls: 'cutter', up: null, hp: 1, sail: 'bone' },
     owned: { cutter: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
+    skills: {}, feats: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
     crew: null, morale: 70, station: 'even', atWill: false, hire: null,
     bombs: 2, bless: 0, caves: {}, music: true, daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,
@@ -62,14 +69,14 @@ export const SAIL_COLORS = { bone: 0xd9cdb0, tar: 0x2a2826, blood: 0x7d1f1a, sea
 export function shipStats(s) {
   const c = SHIP_CLASSES[s.ship.cls], u = s.ship.up, b = crewBonus(s), m = 0.94 + 0.12 * ((s.morale ?? 70) / 100), stn = STATIONS[s.station] || STATIONS.even;
   return {
-    cls: c, maxHp: Math.round(c.hp * (1 + 0.18 * u.hull)), speed: c.speed * (1 + 0.05 * u.sails) * (1 + b.speed) * m * stn.speed, turn: c.turn * (1 + 0.05 * u.sails) * (1 + b.speed),
-    guns: c.guns, dmg: 9 * (1 + 0.15 * u.cannons) * (1 + b.dmg), reload: (4.2 * (1 - 0.07 * u.cannons) * stn.reload) / (1 + b.reload) / m, range: 150,
-    brig: u.brig || 0, cargo: Math.round(c.cargo * (1 + 0.25 * u.hold)), crew: s.crew.length, berths: c.crew + 2 + Math.floor(u.crew / 2) + (s.base.b.quarters || 0),
-    repair: b.repair, stnRepair: stn.repair, loot: b.loot, heal: b.heal,
+    cls: c, maxHp: Math.round(c.hp * (1 + 0.18 * u.hull)), speed: c.speed * (1 + 0.05 * u.sails) * (1 + b.speed) * m * stn.speed * (1 + 0.025 * sk(s, 'seaman')) * (s.favour ? 1.08 : 1), turn: c.turn * (1 + 0.05 * u.sails) * (1 + b.speed) * (1 + 0.025 * sk(s, 'seaman')) * (feat(s, 'hull') ? 1.15 : 1),
+    guns: c.guns, dmg: 9 * (1 + 0.15 * u.cannons) * (1 + b.dmg) * (1 + 0.04 * sk(s, 'gunnery')), reload: (4.2 * (1 - 0.07 * u.cannons) * stn.reload) / (1 + b.reload) / m, range: 150,
+    brig: u.brig || 0, cargo: Math.round(c.cargo * (1 + 0.25 * u.hold)), crew: s.crew.length, berths: c.berths + u.crew + (s.base.b.quarters || 0) + Math.floor(sk(s, 'lead') / 2) + (feat(s, 'born') ? 2 : 0),
+    repair: b.repair, stnRepair: stn.repair, loot: b.loot + 0.04 * sk(s, 'plunder'), heal: b.heal,
   };
 }
 export function playerStats(s) {
-  return { maxHp: 100 + (s.level - 1) * 8, sword: SWORDS[s.sword].dmg * (s.bless > Date.now() ? 1.25 : 1), gun: GUNS[s.gun].dmg, gunReload: GUNS[s.gun].reload };
+  return { maxHp: 100 + (s.level - 1) * 8 + 10 * sk(s, 'tough'), sword: SWORDS[s.sword].dmg * (s.bless > Date.now() ? 1.25 : 1) * (1 + 0.06 * sk(s, 'sword')), gun: GUNS[s.gun].dmg * (1 + 0.08 * sk(s, 'marks')) * (feat(s, 'twin') ? 1.7 : 1), gunReload: GUNS[s.gun].reload * (1 - 0.04 * sk(s, 'marks')) };
 }
 export const rankName = (s) => RANKS[Math.min(RANKS.length - 1, Math.floor((s.level - 1) / 1))] || RANKS[RANKS.length - 1];
 export const cargoUsed = (s) => Object.values(s.cargo).reduce((a, b) => a + b, 0) + s.questCargo;
@@ -90,7 +97,7 @@ export function grant(s, r) {
 const scale = (def, lvl, k = 1.5) => { const m = Math.pow(lvl + 1, k); return { gold: Math.round(def.gold * m), timber: Math.round((def.timber || 0) * m), iron: Math.round((def.iron || 0) * m) }; };
 export const upgradeCost = (s, track) => scale(SHIP_UPGRADES[track], s.ship.up[track]);
 export const buildingCost = (s, id) => scale(BUILDINGS[id], s.base.b[id] || 0, 1.7);
-export const repairCost = (s) => Math.ceil((1 - s.ship.hp) * shipStats(s).maxHp * 0.6);
+export const repairCost = (s) => { const c = SHIP_CLASSES[s.ship.cls], ups = Object.values(s.ship.up).reduce((a, b) => a + b, 0); return Math.ceil((1 - s.ship.hp) * shipStats(s).maxHp * 0.6 * (1 + c.price / 9000) * (1 + 0.05 * ups)); };
 export const costText = (c) => [c.gold && `${c.gold} gold`, c.timber && `${c.timber} timber`, c.iron && `${c.iron} iron`].filter(Boolean).join(' · ') || 'Free';
 
 export function buyPrice(port, good) { return Math.round(GOODS[good].price * PORT_PRICES[port][good]); }

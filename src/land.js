@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { buildCharacter, buildPet, staticFigure } from './character.js';
 import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES, HANDS, GRADES } from './data.js';
-import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus } from './state.js';
+import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus, feat } from './state.js';
 import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './util.js';
 import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE } from './world.js';
 import { input } from './input.js';
@@ -59,7 +59,7 @@ export function createLand(game) {
     list.forEach((h, i) => { const d = HANDS[h.role], [x, z] = at(i, list.length), a = makeActor(d.foe, x, z, 0, lvl * GRADES[h.g].fight * d.fight); a.hand = h; a.state = 'chase'; a.face = land.player.face; a.bar.visible = a.bg.visible = true; });
   }
   const worth = (h) => GRADES[h.g].fight * HANDS[h.role].fight * (HANDS[h.role].land ? 1.6 : 1);
-  function landingParty() { const p = land.player, list = game.save.crew.filter((h) => h.ashore).slice(0, 3); spawnHands(list, (i) => [p.x + Math.sin(p.face + 2 + i * 1.1) * 2, p.z + Math.cos(p.face + 2 + i * 1.1) * 2]); }
+  function landingParty() { const p = land.player, list = game.save.crew.filter((h) => h.ashore).slice(0, feat(game.save, 'born') ? 4 : 3); spawnHands(list, (i) => [p.x + Math.sin(p.face + 2 + i * 1.1) * 2, p.z + Math.cos(p.face + 2 + i * 1.1) * 2]); }
   function handFell(a) {
     const s = game.save, h = a.hand, heal = crewBonus(s).heal;
     if (!s.crew.includes(h)) return;
@@ -194,7 +194,7 @@ export function createLand(game) {
       if (u >= 1) {
         scene.remove(b.mesh); land.bombs.splice(i, 1);
         fx.smoke(b.x1, gy + 0.6, b.z1, null, 14); fx.fire(b.x1, gy + 0.5, b.z1, 8); fx.dust(b.x1, gy + 0.2, b.z1, 12); audio.cannon(0.7); game.shake(0.7);
-        const dmg = 70 + game.save.level * 10;
+        const dmg = (70 + game.save.level * 10) * (feat(game.save, 'powder') ? 1.3 : 1);
         for (const a of land.actors) if (a.alive && a.team === 1 && a.state !== 'buried' && dist2(a.x, a.z, b.x1, b.z1) < 3.8 + a.radius) hurtFoe(a, dmg * rand(0.85, 1.1), { x: b.x1, z: b.z1, isPlayer: true, team: 0 }, true);
       }
     }
@@ -209,7 +209,7 @@ export function createLand(game) {
     land.boarding = { enemy, plats: [plat(ps), plat(enemy)], won: false, t: 0 };
     platforms.push(...land.boarding.plats);
     const [px, pz] = ps.at(-side * 0.8, (ps.model.walk.z0 + ps.model.walk.z1) / 2); spawnPlayer(px, pz, ps.heading + side * Math.PI / 2);
-    spawnHands(s.crew.slice().sort((a, b) => worth(b) - worth(a)).slice(0, 6), (i, n) => ps.at(-side * 0.5, (ps.model.walk.z0 + ps.model.walk.z1) / 2 + (i - (n - 1) / 2) * 2.2));
+    spawnHands(s.crew.slice().sort((a, b) => worth(b) - worth(a)).slice(0, 8), (i, n) => ps.at(-side * 0.5, (ps.model.walk.z0 + ps.model.walk.z1) / 2 + (i - (n - 1) / 2) * 2.2));
     enemy.crew.forEach((k, i) => { const [x, z] = enemy.at(rand(-1, 1) * enemy.cls.beam * 0.25, enemy.model.walk.z0 + 1 + (i / Math.max(1, enemy.crew.length - 1)) * (enemy.model.walk.z1 - enemy.model.walk.z0 - 2)); const a = makeActor(k, x, z, 1, lvl); a.state = 'chase'; a.face = land.player.face + Math.PI; });
     petAshore();
     game.toast('Board her! Cut them down!', 'warn');
@@ -283,6 +283,7 @@ export function createLand(game) {
     p.hp -= dmg; p.combat = 6; game.ui.flash(); game.shake(heavy ? 0.8 : 0.4); audio.hit(1);
     const c = chest(p); fx.blood(c.x, c.y, c.z, 8);
     if (from) { const d = dist2(p.x, p.z, from.x, from.z) || 1, k = heavy ? 9 : 3; p.kx = ((p.x - from.x) / d) * k; p.kz = ((p.z - from.z) / d) * k; }
+    if (p.hp <= 0 && feat(game.save, 'wind') && Date.now() - (p.windAt || 0) > 180000) { p.windAt = Date.now(); p.hp = p.maxHp * 0.4; game.toast('Second wind! You refuse to fall.', 'gold'); audio.good(); return; }
     if (p.hp <= 0) { p.hp = 0; p.alive = false; p.state = 'dead'; p.ch.anim.state = 'dead'; p.ch.anim.t = 0; audio.bad(); game.playerFell(); }
     else if (heavy && p.state !== 'roll') { p.state = 'stagger'; p.t = 0.4; }
   }
@@ -323,7 +324,7 @@ export function createLand(game) {
       }
     }
     if (free) {
-      if (input.take('skill')) { if (p.cdWhirl > 0) game.toast('Catch your breath first', 'dim'); else { p.state = 'whirl'; p.t = 0; p.cdWhirl = 7; p.hitDone = false; audio.swish(); p.combat = Math.max(p.combat, 3); } }
+      if (input.take('skill')) { if (p.cdWhirl > 0) game.toast('Catch your breath first', 'dim'); else { p.state = 'whirl'; p.t = 0; p.cdWhirl = feat(s, 'whirl') ? 4 : 7; p.hitDone = false; audio.swish(); p.combat = Math.max(p.combat, 3); } }
       else if (input.take('bomb')) { if (s.bombs > 0) throwBomb(p); else game.toast('No powder flasks. Blacksmiths sell them.', 'dim'); }
       else if (input.take('primary')) swing(p, 0);
       else if (input.take('shoot')) {

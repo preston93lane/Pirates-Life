@@ -8,7 +8,7 @@ import { createUI } from './ui.js';
 import { createQuests } from './quests.js';
 import { input, initInput } from './input.js';
 import { audio } from './audio.js';
-import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats, pending, addMorale } from './state.js';
+import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats, pending, addMorale, playerStats } from './state.js';
 import { setPlayerLook, staticFigure } from './character.js';
 import { ISLANDS, ISLAND, RANKS, FLAGS, RANSOM, FOG_N, WORLD_R } from './data.js';
 import { clamp, damp, rand, waveHeight, dist2 } from './util.js';
@@ -44,7 +44,7 @@ game.reward = (r, label) => {
   const s = game.save, before = s.level, up = grant(s, r);
   const parts = [r.gold && `${r.gold} gold`, r.timber && `${r.timber} timber`, r.iron && `${r.iron} iron`, r.xp && `${r.xp} infamy`].filter(Boolean).join(', ');
   if (label) { game.toast(parts ? `${label}: ${parts}` : label, 'gold'); audio.coin(); }
-  if (up || s.level > before) { game.ui.banner(`Rank ${s.level}`, RANKS[Math.min(RANKS.length - 1, s.level - 1)], 'Your name carries further. Stronger ships and richer prey await.'); audio.good(); game.sea.refreshStats(); if (game.land.player) game.land.player.maxHp = 100 + (s.level - 1) * 8; }
+  if (up || s.level > before) { game.ui.banner(`Rank ${s.level}`, RANKS[Math.min(RANKS.length - 1, s.level - 1)], 'Your name carries further. You have skill points to spend (Menu, Skills).'); audio.good(); game.sea.refreshStats(); if (game.land.player) game.land.player.maxHp = playerStats(s).maxHp; }
 };
 
 // ---------- mode switches ----------

@@ -19,6 +19,7 @@ export const ISLAND = Object.fromEntries(ISLANDS.map((i) => [i.id, i]));
 export const ZONES = {
   reach: { name: 'The Drowned Reach', x: -380, z: -1120, r: 260 },
   maw: { name: 'The Maw', x: 1130, z: 1010, r: 200 },
+  trident: { name: "Poseidon's Throne", x: -900, z: 760, r: 190 },
 };
 
 // Twelve hulls. Upgrades are a percentage of these numbers, so a small ship never catches a big one.
@@ -44,7 +45,7 @@ export const SHIP_UPGRADES = {
   sails: { name: 'Sailcloth', desc: '+5% speed and turning', gold: 130, timber: 6, iron: 0 },
   cannons: { name: 'Gun deck', desc: '+15% damage, faster reload', gold: 180, timber: 4, iron: 12 },
   hold: { name: 'Cargo hold', desc: '+25% cargo space', gold: 110, timber: 14, iron: 0 },
-  crew: { name: 'Crew berths', desc: '+1 berth for a hired hand (every 2 levels)', gold: 160, timber: 8, iron: 4 },
+  crew: { name: 'Crew berths', desc: '+1 berth for a hired hand', gold: 160, timber: 8, iron: 4 },
   brig: { name: 'Brig cells', desc: 'Holds one more prisoner for ransom', gold: 220, timber: 10, iron: 14 },
 };
 export const MAX_UPGRADE = 5;
@@ -236,3 +237,33 @@ export const STATIONS = {
   guns: { name: 'Man the guns', desc: 'Guns load 25% faster. 12% slower ship.', speed: 0.88, reload: 0.75, repair: 0 },
   repair: { name: 'Damage parties', desc: 'Crew patch the hull and fight fires. Slower ship and guns.', speed: 0.85, reload: 1.3, repair: 0.005 },
 };
+
+// how many hands each hull can carry
+const BERTHS = { cutter: 3, sloop: 4, fluyt: 5, brig: 6, schooner: 6, xebec: 8, brigantine: 8, galleon: 10, frigate: 11, clipper: 9, indiaman: 12, manowar: 16 };
+for (const k in BERTHS) SHIP_CLASSES[k].berths = BERTHS[k];
+// a ghost ship that only sails by night
+SEA_FOES.phantom = { name: 'The Pale Lantern', cls: 'brig', faction: 'ghost', hp: 250, guns: 5, dmg: 7, crew: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'captain'], gold: [320, 480], goods: 2, xp: 170 };
+// special shot is bought by the keg once the guns are fitted for it
+export const AMMO_PACK = { chain: { n: 20, gold: 60 }, fire: { n: 20, gold: 90 }, grapple: { n: 10, gold: 40 } };
+// ----- captain's skills: every rank gives the same small bonus; feats are bought once -----
+export const SKILLS = {
+  sword: { name: 'Swordsmanship', per: '+6% blade damage', max: 5 },
+  marks: { name: 'Marksmanship', per: '+8% pistol damage, 4% faster reload', max: 5 },
+  tough: { name: 'Toughness', per: '+10 health', max: 5 },
+  gunnery: { name: 'Gunnery', per: '+4% cannon damage', max: 5 },
+  seaman: { name: 'Seamanship', per: '+2.5% ship speed and turning', max: 5 },
+  lead: { name: 'Leadership', per: 'Morale falls 8% slower; +1 berth every 2 ranks', max: 5 },
+  plunder: { name: 'Plunder', per: '+4% gold from ships', max: 5 },
+};
+export const FEAT_COST = 3;
+export const FEATS = {
+  whirl: { name: 'Storm of Steel', req: 'sword', desc: 'WHIRL is ready again in 4 seconds instead of 7.' },
+  twin: { name: 'Brace of Pistols', req: 'marks', desc: 'You draw a second pistol: every shot hits 70% harder.' },
+  wind: { name: 'Second Wind', req: 'tough', desc: 'Once every three minutes, a killing blow leaves you standing at 40% health.' },
+  hot: { name: 'Hot Shot', req: 'gunnery', desc: 'Round shot has a 15% chance to set the enemy deck ablaze.' },
+  hull: { name: 'Clean Hull', req: 'seaman', desc: 'Your ship turns 15% faster.' },
+  born: { name: 'Born Leader', req: 'lead', desc: '+2 berths, and a fourth hand may come ashore with you.' },
+  powder: { name: 'Powder Hand', req: 'plunder', desc: 'Powder flasks hit 30% harder and you can carry 9.' },
+};
+// food, water and limes: what a hand uses, and what a full store is, per head
+export const STORES = { food: { name: 'Salt pork and biscuit', gold: 2, per: 12 }, water: { name: 'Fresh water', gold: 1, per: 12 }, limes: { name: 'Limes', gold: 4, per: 6 } };

@@ -247,3 +247,6 @@ textarea.code { display: block; width: 100%; box-sizing: border-box; margin: 6px
 .pick { border-color: var(--gold) !important; }
 .bar2 { height: 8px; border-radius: 4px; background: rgba(0,0,0,.35); overflow: hidden; margin: 6px 0 10px; } .bar2 i { display: block; height: 100%; background: var(--gold); }
 .btns.gun .act:not(.big) { display: none; }
+.dice { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; } .die { font-size: 44px; line-height: 1; color: var(--bone); }
+.card { display: inline-grid; place-items: center; min-width: 44px; height: 60px; padding: 0 6px; border-radius: 6px; background: #e9dfc6; color: #1a1612; font: 700 20px/1 var(--ui); } .card.red { color: #a3201a; }
+.pips { color: var(--gold); letter-spacing: 2px; font-size: 12px; margin-left: 6px; }

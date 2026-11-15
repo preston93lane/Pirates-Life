@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
 import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES } from './data.js';
-import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale } from './state.js';
+import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale, feat, storesFull } from './state.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
 import { heightAt, nearestIsland } from './world.js';
@@ -70,6 +70,9 @@ export function createSea(game) {
     if (bt && !sea.ships.some((s) => s.type === bt.id)) { const sh = sea.spawn(bt.id, openWater(bt.x, bt.z, 0, 140) || { x: bt.x, z: bt.z }); if (sh) { const k = 1 + 0.25 * (game.save.bountyDone[bt.id] || 0); sh.provoked = true; sh.maxHp = sh.hp = Math.round(sh.hp * k); sh.dmg *= 1 + 0.1 * (k - 1) * 4; sh.captain = BOUNTIES.find((b) => b.id === bt.id).captain; } }
     const z = ZONES.reach, bossReady = (id) => !game.save.bosses[id] || Date.now() - game.save.bosses[id] > 20 * 60000;
     if (bossReady('ghost') && !count('ghost') && dist2(sea.player.x, sea.player.z, z.x, z.z) < z.r + 150) { const pos = openWater(z.x, z.z, 0, z.r * 0.6); if (pos) { sea.spawn('ghost', pos); game.toast('A pale ship moves in the fog…', 'warn'); } }
+    const tz = ZONES.trident;
+    if (bossReady('poseidon') && !sea.god && dist2(sea.player.x, sea.player.z, tz.x, tz.z) < tz.r * 0.85) spawnGod();
+    if (game.world.night > 0.85 && lv >= 2 && !sea.ships.some((s) => s.alive && s.type === 'phantom') && Math.random() < 0.12) { const pos = openWater(sea.player.x, sea.player.z, 380, 620); if (pos && sea.spawn('phantom', pos)) game.toast('A cold lantern glows out on the water. A ghost ship is abroad tonight.', 'warn'); }
     const m = ZONES.maw;
     if (bossReady('kraken') && !sea.kraken && dist2(sea.player.x, sea.player.z, m.x, m.z) < m.r * 0.7) spawnKraken({ boss: true });
   }
@@ -125,11 +128,19 @@ export function createSea(game) {
     const dbl = sh.isPlayer && sea.double; if (dbl) sea.double = false;
     sh.reload[side] = sh.isPlayer ? sh.stats.reload * (dbl ? 1.5 : 1) : sh.reloadTime;
     if (sh.isPlayer) { sea.deaf = 6; sea.exposed = 45; } // gunfire drowns out a siren's song, and gives away false colours
-    const kind = sh.isPlayer ? game.save.shot : sh.faction === 'navy' && Math.random() < 0.25 ? 'chain' : (sh.type === 'pirate2' || sh.def.bounty) && Math.random() < 0.25 ? 'fire' : 'round';
+    const kind = sh.isPlayer ? useShot(sh.muzzles(side).length) : sh.faction === 'navy' && Math.random() < 0.25 ? 'chain' : (sh.type === 'pirate2' || sh.def.bounty) && Math.random() < 0.25 ? 'fire' : 'round';
     const out = Math.atan2(sh.fz * side, -sh.fx * side); // world bearing of the beam normal
     sh.muzzles(side).forEach((m, i) => sea.pending.push({ t: i * 0.07 + rand(0.05), sh, side, i, out, target, kind, dbl }));
     return true;
   }
+  // take special shot from the locker; fall back to round shot when it runs out
+  function useShot(n) {
+    const s = game.save, k = s.shot; if (k === 'round') return k;
+    const have = s.ammo[k] || 0;
+    if (have <= 0) { s.shot = 'round'; game.toast(`Out of ${AMMO[k].name.toLowerCase()}. Loading round shot. Shipwrights sell more.`, 'warn'); return 'round'; }
+    s.ammo[k] = Math.max(0, have - n); return k;
+  }
+  sea.useShot = useShot;
   function shoot(q) {
     const sh = q.sh; if (!sh.alive) return;
     const m = sh.muzzles(q.side)[q.i]; if (!m) return;
@@ -188,6 +199,7 @@ export function createSea(game) {
     audio.crack(clamp(1.1 - dist2(x, z, game.camera.position.x, game.camera.position.z) / 380, 0.1, 1));
     if (sh.isPlayer) { game.shake(0.5); game.ui.flash(); }
     else if (mine) {
+      if (kind === 'round' && feat(game.save, 'hot') && Math.random() < 0.15) sh.burn = Math.min(14, sh.burn + 3.5);
       if (!sh.provoked) sea.offend(sh, 'attack');
       sh.provoked = true; sh.morale -= (dmg / sh.maxHp) * 1.6 + (kind === 'chain' ? 0.04 : 0);
       game.ui.floatText(x, y + 3, z, kind === 'chain' ? 'Rigging' : Math.round(dmg), kind === 'fire' ? '#ff9a4a' : '#ffd28a');
@@ -285,6 +297,71 @@ export function createSea(game) {
   }
 
 
+  // ---------- Poseidon: the sea god rises in his own waters ----------
+  const godMat = new THREE.MeshLambertMaterial({ color: 0x2f7a7c, flatShading: true }), godGold = new THREE.MeshLambertMaterial({ color: 0xd9b24a, emissive: 0x6a5210, flatShading: true }), godBeard = new THREE.MeshLambertMaterial({ color: 0xd4ece6, flatShading: true });
+  const markRing = new THREE.Mesh(new THREE.RingGeometry(12, 15, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff4a2a, transparent: true, opacity: 0.8, depthTest: false, fog: false })); markRing.visible = false; scene.add(markRing);
+  function spawnGod() {
+    const z = ZONES.trident, g = new THREE.Group(), lv = 1 + 0.05 * (game.save.level - 1);
+    const add = (geo, mat, x, y, zz, rx = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, zz); m.rotation.set(rx, 0, rz); g.add(m); return m; };
+    add(new THREE.CylinderGeometry(6.5, 5, 18, 8), godMat, 0, 7, 0); add(new THREE.CylinderGeometry(9, 6.5, 5, 8), godMat, 0, 17, 0);
+    add(new THREE.IcosahedronGeometry(3.7, 1), godMat, 0, 23.2, 0); add(new THREE.ConeGeometry(3.1, 8, 6), godBeard, 0, 19, 2.6, Math.PI);
+    add(new THREE.SphereGeometry(0.5, 6, 4), godGold, -1.3, 24, 3.3); add(new THREE.SphereGeometry(0.5, 6, 4), godGold, 1.3, 24, 3.3);
+    for (let i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.6, 3.2, 4), godGold, Math.sin(i * 1.047) * 2.7, 27.4, Math.cos(i * 1.047) * 2.7);
+    add(new THREE.CylinderGeometry(1.9, 1.5, 14, 6), godMat, -10, 11, 1, 0, -0.25); add(new THREE.CylinderGeometry(1.9, 1.5, 12, 6), godMat, 11.5, 19, 1, 0, -0.95);
+    add(new THREE.CylinderGeometry(0.4, 0.4, 34, 5), godGold, 16, 20, 3); add(new THREE.BoxGeometry(5, 0.7, 0.7), godGold, 16, 35, 3);
+    for (const dx of [-2.2, 0, 2.2]) add(new THREE.ConeGeometry(0.6, dx ? 4 : 6, 4), godGold, 16 + dx, dx ? 37.3 : 38.3, 3);
+    g.scale.setScalar(1.8); g.position.set(z.x, -72, z.z); scene.add(g);
+    sea.god = { type: 'god', group: g, x: z.x, z: z.z, hp: Math.round(1500 * lv), maxHp: Math.round(1500 * lv), lv, alive: true, name: 'Poseidon', speed: 0, rise: 0, cd: 6, mark: null, n: 0, sink: 0 };
+    audio.roar(); audio.thunder(); game.shake(1.2); game.toast('The sea stands up. POSEIDON rises! Keep moving: stay out of the red rings.', 'warn');
+  }
+  function endGod() { const gd = sea.god; if (!gd) return; scene.remove(gd.group); markRing.visible = false; if (sea.target === gd) sea.target = null; sea.god = null; if (!sea.event) game.world.setWeather(0); }
+  sea.endGod = endGod;
+  function hitGod(dmg, x, y, z) {
+    const gd = sea.god, s = game.save; gd.hp -= dmg; fx.splash(x, z, 1); game.ui.floatText(x, y + 2, z, Math.round(dmg), '#ffd28a');
+    if (gd.hp > 0) return;
+    gd.hp = 0; gd.alive = false; markRing.visible = false; gd.mark = null; s.bosses.poseidon = Date.now(); const first = !s.favour; s.favour = true; sea.refreshStats(); addMorale(s, 25);
+    game.reward({ gold: 2500, xp: 900, iron: 80 }, 'Poseidon sinks beneath the waves'); game.emit('boss', { boss: 'poseidon' }); audio.good();
+    if (first) game.ui.banner("The sea god's favour", 'Poseidon yields', 'He will remember you. Your ship sails 8% faster, forever.');
+  }
+  function updateGod(dt, active) {
+    const gd = sea.god, p = sea.player, z = ZONES.trident; if (!gd) return;
+    gd.rise = Math.min(1, gd.rise + dt * 0.35);
+    if (!gd.alive) { gd.sink += dt * 7; if (gd.sink > 44) { endGod(); return; } }
+    gd.group.position.y = (-40 + 40 * smooth(0, 1, gd.rise) + Math.sin(game.time * 0.8) * 0.7 - gd.sink) * 1.8;
+    gd.group.rotation.y += angleDiff(gd.group.rotation.y, Math.atan2(p.x - gd.x, p.z - gd.z)) * Math.min(1, 1.5 * dt);
+    if (!gd.alive) return;
+    if (!sea.event) game.world.setWeather(0.55 * gd.rise);
+    if (dist2(p.x, p.z, z.x, z.z) > z.r + 330) { endGod(); if (active) game.toast('The sea god sinks back to his throne.', 'dim'); return; }
+    if (!active || !p.alive || gd.rise < 1) return;
+    gd.cd -= dt;
+    if (gd.mark) {
+      const m = gd.mark; m.t -= dt; markRing.visible = true; markRing.position.set(m.x, waveHeight(m.x, m.z, game.time) + 0.5, m.z); markRing.material.opacity = 0.45 + 0.4 * Math.sin(game.time * 14);
+      if (m.t <= 0) {
+        game.ui.bolt(); audio.thunder(); fx.splash(m.x, m.z, 4); game.shake(0.6); gd.mark = null; markRing.visible = false;
+        if (dist2(p.x, p.z, m.x, m.z) < 16) { sea.damage(p, 36 * gd.lv, null, p.x, 3, p.z); game.toast("The trident's lightning strikes your deck!", 'warn'); }
+      }
+    } else if (gd.cd <= 0) {
+      gd.n++;
+      if (gd.n % 4 === 0) { game.toast('Poseidon heaves the sea at you!', 'warn'); audio.roar(); p.speed = -5; p.heading += 0.6; sea.damage(p, 12 * gd.lv, null, p.x, 2, p.z); game.shake(1); gd.cd = 5; }
+      else { const lead = 2.1; gd.mark = { x: p.x + p.fx * p.speed * lead, z: p.z + p.fz * p.speed * lead, t: 2.3 }; gd.cd = gd.hp < gd.maxHp * 0.5 ? 3.3 : 4.8; }
+    }
+  }
+  // ---------- food, water and limes ----------
+  function provisions(dt) {
+    const s = game.save, n = s.crew.length + 1; sea.eatT = (sea.eatT || 0) + dt; if (sea.eatT < 20) return; sea.eatT = 0;
+    const full = storesFull(s), before = s.morale; let bad = 0;
+    s.food = Math.max(0, s.food - n * 0.08); s.water = Math.max(0, s.water - n * 0.08); s.limes = Math.max(0, s.limes - n * 0.04);
+    if (s.limes <= 0) s.scurvy = Math.min(30, (s.scurvy || 0) + 1); else s.scurvy = Math.max(0, (s.scurvy || 0) - 2);
+    if (s.crew.length) { if (s.food <= 0) bad += 2; if (s.water <= 0) bad += 3; if (s.scurvy > 9) bad += 1.5; }
+    const low = s.food < full.food * 0.2 || s.water < full.water * 0.2 || s.limes < full.limes * 0.2;
+    sea.nagT = (sea.nagT || 0) - 20;
+    if ((low || bad) && sea.nagT <= 0) { sea.nagT = 120; game.toast(s.water <= 0 ? 'The water casks are dry. The crew are parched and angry.' : s.food <= 0 ? 'No food left. The crew are starving.' : s.scurvy > 9 ? 'Scurvy is spreading. The crew need limes.' : 'Stores are running low. Fill them at any tavern (Bar).', bad ? 'warn' : 'dim'); }
+    if (bad) { addMorale(s, -bad); sea.refreshStats(); if (before >= 25 && s.morale < 25) game.toast('The crew talk of mutiny. Feed them, or share out rum and gold (Menu, Command).', 'warn'); }
+    if (s.crew.length && s.morale <= 0) { // revolt
+      const gone = Math.ceil(s.crew.length / 2), gold = Math.min(Math.floor(s.gold * 0.35), 300 * gone); s.gold -= gold; s.crew.splice(0, gone); s.morale = 45; sea.refreshStats(); audio.bad(); game.shake(1);
+      game.ui.banner('Mutiny!', 'The crew revolt', `${gone} hand${gone > 1 ? 's seize' : ' seizes'} ${gold} gold from your chest and take the boats. Keep the rest fed and paid.`);
+    }
+  }
   // ---------- events at sea: storms, sirens, a kraken from below ----------
   const sirenMat = new THREE.MeshBasicMaterial({ color: 0xa8ecd8 }), sirenRock = new THREE.MeshLambertMaterial({ color: 0x4b4741, flatShading: true });
   function startEvent(type) {
@@ -400,7 +477,7 @@ export function createSea(game) {
       if (input.take('swivel') && sea.swivelCd <= 0) {
         sea.swivelCd = 2.8; sea.exposed = 45; sea.deaf = 6;
         const my = (p.y || 0) + p.model.deckY + 1.6, d = dist2(p.x, p.z, ax, az), ang = Math.atan2(ax - p.x, az - p.z), el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) - Math.atan2(my - 1, d) * 0.5, dx = Math.sin(ang), dz = Math.cos(ang), ce = Math.cos(el);
-        sea.balls.push({ x: p.x + dx * 2, y: my, z: p.z + dz * 2, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: p, dmg: p.stats.dmg * 1.6, life: 4, kind: game.save.shot });
+        sea.balls.push({ x: p.x + dx * 2, y: my, z: p.z + dz * 2, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: p, dmg: p.stats.dmg * 1.6, life: 4, kind: useShot(1) });
         fx.smoke(p.x + dx * 3, my, p.z + dz * 3, [dx, 0, dz], 6); audio.cannon(0.45); game.shake(0.1);
       }
     } else input.pressed.swivel = false;
@@ -421,7 +498,7 @@ export function createSea(game) {
       if (g.cd > 0) return;
       sea.gunCd[key] = g.max; sea.exposed = 45; sea.deaf = 6;
       const d = dist2(m.x, m.z, ax, az), a2 = Math.atan2(ax - m.x, az - m.z), el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) - Math.atan2(m.y - 1, d) * 0.5, dx = Math.sin(a2), dz = Math.cos(a2), ce = Math.cos(el);
-      sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: p, dmg: p.stats.dmg * 1.5, life: 4, kind: game.save.shot });
+      sea.balls.push({ x: m.x, y: m.y, z: m.z, vx: dx * ce * MUZZLE_V, vy: Math.sin(el) * MUZZLE_V, vz: dz * ce * MUZZLE_V, own: p, dmg: p.stats.dmg * 1.5, life: 4, kind: useShot(1) });
       fx.smoke(m.x + dx, m.y, m.z + dz, [dx, 0, dz], 8); audio.cannon(0.8); game.shake(0.35);
     }
   }
@@ -433,6 +510,7 @@ export function createSea(game) {
     for (const s of sea.ships) if (s.alive) consider(s, (hostile(s) || s.provoked ? 140 : 0) + (s === sea.target ? 40 : 0));
     if (sea.kraken) for (const a of sea.kraken.arms) if (a.alive && a.state !== 'rise') { const b = p.bearing(a.x, a.z); consider(a, 300 - b.off * 60); }
     if (sea.event && sea.event.type === 'siren' && sea.event.alive) consider(sea.event, 120);
+    if (sea.god && sea.god.alive && sea.god.rise > 0.6) consider(sea.god, 400);
     sea.target = best;
   }
 
@@ -454,6 +532,8 @@ export function createSea(game) {
     if (active && p.alive) control(dt);
     for (const s of sea.ships) { if (s.alive && !s.frozen) { if (active) steer(s, dt); else { s.sail = 0; s.rudder = 0; } } s.update(dt, time); }
     p.update(dt, time);
+    updateGod(dt, active); if (active && p.alive && !p.frozen) provisions(dt);
+    for (const s of sea.ships) if (s.alive && s.type === 'phantom' && game.world.night < 0.15 && !s.frozen) { s.alive = false; s.gone = true; scene.remove(s.group); if (sea.target === s) sea.target = null; fx.splash(s.x, s.z, 2); if (dist2(s.x, s.z, p.x, p.z) < 500) game.toast('Dawn. The ghost ship fades like mist.', 'dim'); }
     sea.braceT = Math.max(0, (sea.braceT || 0) - dt); sea.braceCd = Math.max(0, (sea.braceCd || 0) - dt); sea.lightT = Math.max(0, (sea.lightT || 0) - dt);
     for (const k in sea.gunCd) sea.gunCd[k] = Math.max(0, sea.gunCd[k] - dt);
     if (active && p.alive && p.hp < p.maxHp) { p.hp = Math.min(p.maxHp, p.hp + (p.stats.repair + p.stats.stnRepair * p.maxHp) * dt); if (p.stats.stnRepair && p.burn > 0) p.burn -= dt * 2; }
@@ -489,6 +569,7 @@ export function createSea(game) {
         for (const s of sea.ships) if (s !== b.own && s.alive && !(b.own !== p && !s.isPlayer) && s.hitTest(b.x, b.y, b.z)) { sea.damage(s, b.dmg, b.own, b.x, b.y, b.z, b.kind); dead = true; break; }
         if (!dead && b.own !== p && p.alive && p.hitTest(b.x, b.y, b.z)) { sea.damage(p, b.dmg, b.own, b.x, b.y, b.z); dead = true; }
         if (!dead && sea.kraken && b.own === p) for (const a of sea.kraken.arms) if (a.alive && a.state !== 'rise' && b.y < 20 && dist2(b.x, b.z, a.x, a.z) < 3.2) { hitArm(a, b.dmg, b.x, b.y, b.z); dead = true; break; }
+        if (!dead && sea.god && sea.god.alive && sea.god.rise > 0.6 && b.own === p && b.y < 50 && dist2(b.x, b.z, sea.god.x, sea.god.z) < 15) { hitGod(b.dmg, b.x, b.y, b.z); dead = true; }
         if (!dead && sea.event && sea.event.type === 'siren' && b.own === p && dist2(b.x, b.z, sea.event.x, sea.event.z) < 9 && b.y < 9) { hitSiren(b.dmg, b.x, b.y, b.z); dead = true; }
       }
       }
