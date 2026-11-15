@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES } from './data.js';
+import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES, STATIONS } from './data.js';
 import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale, feat, storesFull } from './state.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
@@ -63,9 +63,9 @@ export function createSea(game) {
   };
   function populate() {
     const lv = game.save.level, count = (f) => sea.ships.filter((s) => s.alive && s.faction === f).length;
-    if (count('merchant') < 3) sea.spawn('merchant');
-    if (count('pirate') < (lv >= 3 ? 4 : 3)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
-    if (count('navy') < 2) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
+    if (count('merchant') < 2) sea.spawn('merchant');
+    if (count('pirate') < (lv >= 5 ? 3 : 2)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
+    if (count('navy') < (game.save.rep.navy <= -20 ? 2 : 1)) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
     if (game.save.rep.navy <= -60 && !sea.ships.some((s) => s.alive && s.hunter)) { sea.hunterT = (sea.hunterT ?? 20) - 2.5; if (sea.hunterT <= 0) { const pos = openWater(sea.player.x, sea.player.z, 460, 680); if (pos && sea.spawn('hunter', pos)) { sea.hunterT = 100; game.toast('A navy hunter has your scent. She outguns you.', 'warn'); } } }
     const bt = game.save.bounty;
     if (bt && !sea.ships.some((s) => s.type === bt.id)) { const sh = sea.spawn(bt.id, openWater(bt.x, bt.z, 0, 140) || { x: bt.x, z: bt.z }); if (sh) { const k = 1 + 0.25 * (game.save.bountyDone[bt.id] || 0); sh.provoked = true; sh.maxHp = sh.hp = Math.round(sh.hp * k); sh.dmg *= 1 + 0.1 * (k - 1) * 4; sh.captain = BOUNTIES.find((b) => b.id === bt.id).captain; } }
@@ -191,6 +191,7 @@ export function createSea(game) {
   sea.damage = (sh, dmg, by, x, y, z, kind = 'round') => {
     if (!sh.alive) return;
     const mine = by && by.isPlayer && !sh.isPlayer;
+    if (mine && sh.released) return; // a ship you let go is under your word: you cannot rob her twice
     if (kind === 'grapple') { if (mine) { sh.provoked = true; hook(sh); } return; }
     if (kind === 'chain') { dmg *= 0.25; sh.sailHp = Math.max(sh.isPlayer ? 0.4 : 0.2, sh.sailHp - 0.1); if (sh.isPlayer) game.tip('chain', 'Chain shot has cut your rigging. You are slower until it mends itself.'); }
     if (kind === 'fire') { dmg *= 0.5; sh.burn = Math.min(sh.isPlayer ? 7 : 14, sh.burn + 4.5); }
@@ -562,7 +563,7 @@ export function createSea(game) {
   function pickTarget() {
     const p = sea.player; let best = null, bs = 1e9;
     const consider = (t, boost) => { if (t.alive === false) return; const d = dist2(p.x, p.z, t.x, t.z); if (d > 260) return; const s = d - boost; if (s < bs) { bs = s; best = t; } };
-    for (const s of sea.ships) if (s.alive) consider(s, (hostile(s) || s.provoked ? 140 : 0) + (s === sea.target ? 40 : 0));
+    for (const s of sea.ships) if (s.alive && !s.released) consider(s, (hostile(s) || s.provoked ? 140 : 0) + (s === sea.target ? 40 : 0));
     if (sea.kraken) for (const a of sea.kraken.arms) if (a.alive && a.state !== 'rise') { const b = p.bearing(a.x, a.z); consider(a, 300 - b.off * 60); }
     if (sea.event && sea.event.type === 'siren' && sea.event.alive) consider(sea.event, 120);
     if (sea.god && sea.god.alive && sea.god.rise > 0.6) consider(sea.god, 400);
@@ -587,6 +588,7 @@ export function createSea(game) {
     if (active && p.alive) control(dt);
     for (const s of sea.ships) { if (s.alive && !s.frozen) { if (active) steer(s, dt); else { s.sail = 0; s.rudder = 0; } } s.update(dt, time); }
     p.update(dt, time);
+    if (sea.stn) { sea.stn.t -= dt; if (sea.stn.t <= 0) { game.save.station = sea.stn.k; sea.stn = null; sea.refreshStats(); audio.good(); game.toast(`"${STATIONS[game.save.station].name}. Ready, Captain."`, 'gold'); } }
     updateGod(dt, active); if (active && p.alive && !p.frozen) provisions(dt);
     for (const s of sea.ships) if (s.alive && s.type === 'phantom' && game.world.night < 0.15 && !s.frozen) { s.alive = false; s.gone = true; scene.remove(s.group); if (sea.target === s) sea.target = null; fx.splash(s.x, s.z, 2); if (dist2(s.x, s.z, p.x, p.z) < 500) game.toast('Dawn. The ghost ship fades like mist.', 'dim'); }
     sea.braceT = Math.max(0, (sea.braceT || 0) - dt); sea.braceCd = Math.max(0, (sea.braceCd || 0) - dt); sea.lightT = Math.max(0, (sea.lightT || 0) - dt);

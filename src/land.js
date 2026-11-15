@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { buildCharacter, buildPet, staticFigure } from './character.js';
 import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES, HANDS, GRADES } from './data.js';
-import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus, feat } from './state.js';
+import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus, feat, addRep } from './state.js';
 import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './util.js';
 import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE } from './world.js';
 import { input } from './input.js';
@@ -39,20 +39,17 @@ export function createLand(game) {
   function removeActor(a) { scene.remove(a.ch.root); if (a.line) scene.remove(a.line); }
 
   // ----- the captain's torch: lit in caves and after dark -----
-  const torch = new THREE.Group(), torchLight = new THREE.PointLight(0xffb469, 0, 46, 1.25);
-  { const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.75, 5), new THREE.MeshLambertMaterial({ color: 0x4a3420, flatShading: true })), flame = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 6), new THREE.MeshBasicMaterial({ color: 0xffb040, fog: false }));
-    stick.position.y = 0.3; flame.position.y = 0.82; torch.add(stick, flame); torch.userData.flame = flame; torch.visible = false; scene.add(torch, torchLight); }
+  const torchLight = new THREE.PointLight(0xffb469, 0, 46, 1.25); scene.add(torchLight);
   function updateTorch(dt) {
-    const p = land.player, lit = !!land.kind && p && (land.cave || game.world.night > 0.3), want = !lit ? 0 : land.cave ? 60 : 34 * Math.min(1, game.world.night * 1.6);
-    torchLight.intensity = damp(torchLight.intensity, want, 6, dt); torch.visible = lit && land.gun == null;
+    const p = land.player, lit = !!land.kind && p && p.alive && (land.cave || game.world.night > 0.3), want = !lit ? 0 : land.cave ? 60 : 34 * Math.min(1, game.world.night * 1.6);
+    torchLight.intensity = damp(torchLight.intensity, want, 6, dt);
     if (!p) return;
-    const s = Math.sin(p.face), c = Math.cos(p.face);
-    torch.position.set(p.x - c * 0.42 + s * 0.28, p.y + 1.15, p.z + s * 0.42 + c * 0.28); torch.rotation.set(0.25, p.face, 0.2);
-    torchLight.position.set(p.x + s * 0.4, p.y + 2.6, p.z + c * 0.4);
-    const fl = torch.userData.flame; fl.scale.setScalar(0.85 + Math.random() * 0.35);
-    if (torch.visible && Math.random() < dt * 9) fx.emit(torch.position.x, torch.position.y + 0.95, torch.position.z, { n: 1, color: 0xffa040, lit: true, speed: 0.3, up: 1.4, life: 0.45, size: 0.4, grow: -0.5, spread: 0.08 });
+    p.ch.torch = !!lit && land.gun == null;
+    const t = p.ch.torch && p.ch.torchPos();
+    if (t && p.ch.P.torch.visible) { torchLight.position.set(t.x, t.y + 0.9, t.z); if (Math.random() < dt * 9) fx.emit(t.x, t.y + 0.1, t.z, { n: 1, color: 0xffa040, lit: true, speed: 0.3, up: 1.4, life: 0.45, size: 0.4, grow: -0.5, spread: 0.08 }); }
+    else torchLight.position.set(p.x, p.y + 2.6, p.z);
   }
-  land.torchOff = () => { torchLight.intensity = 0; torch.visible = false; };
+  land.torchOff = () => { torchLight.intensity = 0; if (land.player) land.player.ch.torch = false; };
   // ----- hired hands who fight beside you -----
   function spawnHands(list, at) {
     const s = game.save, lvl = 1 + 0.07 * (s.level - 1);
@@ -68,16 +65,17 @@ export function createLand(game) {
     game.toast(`${h.name} the ${HANDS[h.role].name.toLowerCase()} is dead. The crew take it hard.`, 'warn');
   }
 
+  const aimLine = new THREE.Mesh(lineGeo, new THREE.MeshBasicMaterial({ color: 0xcfc7b0, transparent: true, opacity: 0.6, depthWrite: false })); aimLine.visible = false; scene.add(aimLine);
   function ensurePlayer() {
     if (land.player) return land.player;
-    const ch = buildCharacter('player', { seed: 0, blade: BLADES[game.save.sword] });
+    const ch = buildCharacter('player', { seed: 0, blade: BLADES[game.save.sword], torch: true });
     const p = { isPlayer: true, ch, x: 0, z: 0, y: 0, face: 0, team: 0, hp: 1, maxHp: 1, state: 'free', t: 0, alive: true, radius: 0.42, kx: 0, kz: 0, cdRoll: 0, gunT: 0, combat: 0, blockT: 0, def: { name: 'You' } };
     land.player = p; return p;
   }
   land.refreshLook = () => { // rebuild the captain's model after a change of clothes
     const p = land.player; if (!p) return;
     const shown = !!p.ch.root.parent; scene.remove(p.ch.root);
-    p.ch = buildCharacter('player', { blade: BLADES[game.save.sword] }); if (shown) { scene.add(p.ch.root); place(p); }
+    p.ch = buildCharacter('player', { blade: BLADES[game.save.sword], torch: true }); if (shown) { scene.add(p.ch.root); place(p); }
   };
   // ----- companion animal -----
   land.setPet = () => {
@@ -147,16 +145,18 @@ export function createLand(game) {
       }
     }
     isl.cleared = isl.cleared || {};
-    const raidReady = now - s.raidAt > 20 * 60000;
+    const raidReady = now - s.raidAt > 20 * 60000; s.navyRaid = s.navyRaid || {}; const navyCold = now - (s.navyRaid[isl.id] || 0) < 30 * 60000; land.fortWarned = false;
     isl.spawns.forEach((sp, i) => {
       if (isl.cleared[i] && now - isl.cleared[i] < 10 * 60000) return;
       if (sp.foe === 'crabking' && s.bosses.crabking && now - s.bosses.crabking < 20 * 60000) return;
       if (isl.kind === 'fort' && !raidReady) return;
-      const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl); a.spawnI = i;
+      if (sp.navy && navyCold) return;
+      const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl * (sp.navy ? 1.45 : 1)); a.spawnI = i;
       if (sp.foe === 'skeleton') { a.state = 'buried'; a.ch.root.visible = false; }
     });
     if (isl.id === 'regal' && isWanted(s)) { for (let i = 0; i < 4; i++) { const a = makeActor('soldier', isl.site.x + isl.dir[0] * 18 + rand(-6, 6), isl.site.z + isl.dir[1] * 18 + rand(-6, 6), 1, lvl); a.state = 'chase'; } game.toast('The garrison knows your face!', 'warn'); }
     for (const c of isl.chests) addChest(c, !!s.chests[c.id]);
+    if (isl.navyVault) addChest({ x: isl.navyVault.x, z: isl.navyVault.z, id: `navy:${isl.id}`, tier: 4, navy: isl.id }, navyCold);
     if (isl.vault) addChest({ x: isl.vault.x, z: isl.vault.z, id: 'vault', tier: 4, vault: true }, !raidReady);
     for (const m of s.maps) if (m.island === isl.id) { const d = isl.digs[m.spot], mesh = new THREE.Mesh(moundGeo, moundMat); mesh.position.set(d.x, heightAt(d.x, d.z) + 0.1, d.z); scene.add(mesh); land.mounds.push(mesh); }
     petAshore(); landingParty();
@@ -232,7 +232,7 @@ export function createLand(game) {
     if (land.deck) { const i = platforms.indexOf(land.deck); if (i >= 0) platforms.splice(i, 1); land.deck = null; const sh = game.sea.player; if (sh.group.userData.helm) sh.group.userData.helm.visible = true; sh.fadeSails(false); }
     if (land.player) scene.remove(land.player.ch.root);
     if (land.boarding) { for (const p of land.boarding.plats) { const i = platforms.indexOf(p); if (i >= 0) platforms.splice(i, 1); } game.sea.player.frozen = false; land.boarding.enemy.frozen = false; game.sea.player.fadeSails(false); land.boarding.enemy.fadeSails(false); land.boarding = null; }
-    land.kind = null; land.isl = null; land.gun = null; land.torchOff(); land.dockPet();
+    aimLine.visible = false; land.kind = null; land.isl = null; land.gun = null; land.torchOff(); land.dockPet();
   };
 
   // ---------- movement ----------
@@ -329,7 +329,7 @@ export function createLand(game) {
       else if (input.take('primary')) swing(p, 0);
       else if (input.take('shoot')) {
         if (p.gunT > 0) game.toast('Still reloading', 'dim');
-        else { const t = findFocus(30, Math.sin(p.face), Math.cos(p.face)); p.state = 'shoot'; p.t = 0; p.shotAt = t; p.fired = false; if (t) p.face = Math.atan2(t.x - p.x, t.z - p.z); }
+        else { const t = findFocus(30, Math.sin(p.face), Math.cos(p.face)); p.state = 'aimgun'; p.t = 0; if (t) p.face = Math.atan2(t.x - p.x, t.z - p.z); game.tip2('aim', 'Tap SHOOT for a quick shot. Hold it to aim: drag or use the stick to swing the pistol, then let go to fire.', 9); }
       } else if (input.take('rum')) {
         if (s.rum > 0 && p.hp < p.maxHp) { s.rum--; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (0.55 + Math.min(0.4, crewBonus(s).heal * 0.4))); audio.good(); game.toast('You drink the rum. Wounds fade.', 'dim'); fx.sparks(p.x, p.y + 1.6, p.z, 10, 0x9fe0a8); }
         else game.toast(s.rum > 0 ? 'You are not hurt' : 'No rum left', 'dim');
@@ -373,6 +373,14 @@ export function createLand(game) {
         fx.dust(p.x, p.y + 0.3, p.z, 10); if (any) { audio.hit(1); game.hitStop(0.06); game.shake(0.4); }
       }
       if (u >= 1) p.state = 'free';
+    } else if (p.state === 'aimgun') { // pistol up: turn to aim, let go to fire along the line
+      an.state = 'shoot'; an.u = 0.08;
+      p.face -= input.look.x * 0.006 + input.move.x * 1.7 * dt; input.look.x = 0; game.cam.lookT = 1;
+      game.cam.yaw += angleDiff(game.cam.yaw, p.face) * Math.min(1, 7 * dt);
+      const dx = Math.sin(p.face), dz = Math.cos(p.face); let hit = null, best = 32;
+      for (const a of land.actors) { if (!a.alive || a.team !== 1 || a.state === 'buried') continue; const rx = a.x - p.x, rz = a.z - p.z, along = rx * dx + rz * dz; if (along < 0.5 || along > best) continue; if (Math.abs(rx * dz - rz * dx) < a.radius + 0.55) { best = along; hit = a; } }
+      aimLine.visible = true; aimLine.material.color.set(hit ? 0xffd28a : 0xcfc7b0); aimLine.scale.z = best; aimLine.rotation.y = p.face; aimLine.position.set(p.x + dx * (0.7 + best / 2), p.y + 1.45, p.z + dz * (0.7 + best / 2));
+      if (!input.down.shoot && p.t > 0.1) { p.state = 'shoot'; p.t = 0.13; p.shotAt = hit; p.fired = false; }
     } else if (p.state === 'throw') { an.state = 'throw'; an.u = Math.min(1, p.t / 0.45); if (p.t > 0.45) p.state = 'free'; }
     else if (p.state === 'shoot') {
       an.state = 'shoot'; an.u = Math.min(1, p.t / 0.5);
@@ -388,6 +396,7 @@ export function createLand(game) {
       an.state = 'dig'; if (Math.random() < dt * 7) { fx.dust(p.x + Math.sin(p.face) * 0.8, p.y + 0.2, p.z + Math.cos(p.face) * 0.8, 3, 0x7b6548); } p.digS = (p.digS || 0) + dt; if (p.digS > 0.42) { p.digS = 0; audio.dig(); }
       if (p.t > 2.4) { p.state = 'free'; p.digDone(); }
     }
+    aimLine.visible = p.state === 'aimgun';
     settle(p, dt);
   }
   const iframes = (p) => p.state === 'roll' && p.t > 0.03 && p.t < 0.4;
@@ -485,6 +494,7 @@ export function createLand(game) {
   function openChest(ch) {
     ch.open = true; const s = game.save; game.emit('chest', {}); audio.good(); fx.sparks(ch.c.x, heightAt(ch.c.x, ch.c.z) + 0.8, ch.c.z, 16, 0xffd978);
     if (ch.c.cave) { s.caves[ch.c.cave] = Date.now(); const r = chestLoot(3); r.gold = Math.round(r.gold * 1.4); game.reward(r, 'The cave hoard is yours'); if (Math.random() < 0.6) { s.bombs = Math.min(6, s.bombs + 2); game.toast('Two powder flasks were packed in with it.', 'gold'); } }
+    else if (ch.c.navy) { const big = land.isl.navy.S > 30; s.navyRaid[ch.c.navy] = Date.now(); game.reward({ gold: Math.round(rand(900, 1300) * (big ? 1.6 : 0.8) * (1 + s.level * 0.08)), iron: big ? 90 : 40, timber: big ? 60 : 30, xp: big ? 320 : 160 }, `The strongroom of ${land.isl.navy.name} is yours`); addRep(s, 'navy', big ? -30 : -18); game.cheer(8); game.emit('raid', { island: land.isl.id }); game.toast('The navy will not forgive this.', 'warn'); }
     else if (ch.c.vault) { s.raidAt = Date.now(); game.reward({ gold: Math.round(rand(700, 950) * (1 + s.level * 0.08)), iron: 60, timber: 60, xp: 150 }, "Bloodwater's vault is yours"); game.emit('raid', { island: land.isl.id }); }
     else { s.chests[ch.c.id] = true; if (ch.c.id === 'bones:idol' && !s.pets.parrot) { s.pets.parrot = true; if (!s.pet) { s.pet = 'parrot'; land.setPet(); } game.ui.banner('New companion', PETS.parrot.name, 'A scarlet bird drops from the idol onto your shoulder. ' + PETS.parrot.perk); } const r = chestLoot(ch.c.tier); game.reward(r, r.rum ? 'Chest opened (and a bottle of rum)' : 'Chest opened'); }
   }
@@ -533,6 +543,7 @@ export function createLand(game) {
     if (land.kind === 'deck') rideDeck(false);
     for (const a of land.actors) updateFoe(a, dt);
     updatePet(dt); updateBombs(dt); updateTorch(dt);
+    if (land.isl && land.isl.navy && !land.cave && !land.fortWarned && dist2(p.x, p.z, land.isl.navy.x, land.isl.navy.z) < land.isl.navy.S / 2 + 30) { land.fortWarned = true; if (land.actors.some((a) => a.alive && a.team === 1 && a.def.look !== 'crab' && a.spawnI !== undefined && land.isl.spawns[a.spawnI].navy)) game.toast(`${land.isl.navy.name}. A full garrison, and they shoot on sight. Bring your best hands or stay away.`, 'warn'); else game.toast(`${land.isl.navy.name} is quiet. You emptied it not long ago.`, 'dim'); }
     // chance encounters reveal themselves only when you are close; ambushers spring out
     for (const q of land.pois) {
       if (q.done) continue; const d = dist2(p.x, p.z, q.x, q.z);

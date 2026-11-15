@@ -88,8 +88,11 @@ function plan(isl) {
   isl.flats = fr ? [{ x: isl.site.x, z: isl.site.z, r: fr, y: fy }] : [];
   if (isl.kind === 'town') { // a bandit camp on the far side
     isl.camp = { x: isl.x - isl.dir[0] * isl.r * 0.42, z: isl.z - isl.dir[1] * isl.r * 0.42 };
-    isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 14, y: 4 });
+    if (isl.id === 'regal') { isl.navy = { x: isl.camp.x, z: isl.camp.z, S: 38, rot: isl.land, name: 'Fort Regal' }; isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 33, y: 5 }); }
+    else isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 14, y: 4 });
   }
+  if (isl.id === 'gull') { isl.navy = { x: isl.x, z: isl.z, S: 20, rot: isl.land, name: 'Gull Battery' }; isl.flats = [{ x: isl.x, z: isl.z, r: 18, y: 4.5 }]; }
+  if (isl.navy) { const n = isl.navy, s = Math.sin(n.rot), c = Math.cos(n.rot); n.at = (lx, lz) => ({ x: n.x + s * lz + c * lx, z: n.z + c * lz - s * lx }); }
   isl.grid = new Float32Array((N + 1) * (N + 1));
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) isl.grid[j * (N + 1) + i] = heightRaw(isl, isl.x - isl.ext + i * isl.cell, isl.z - isl.ext + j * isl.cell);
 
@@ -126,7 +129,15 @@ function plan(isl) {
   for (let i = 0; i < nChest; i++) isl.chests.push(Object.assign(spot(2, 40), { id: `${isl.id}:${i}`, tier: isl.kind === 'town' ? 1 : 2 }));
 
   const sp = (foe, p) => isl.spawns.push({ foe, x: p.x, z: p.z });
-  if (isl.kind === 'town') {
+  if (isl.navy) { // a garrison far stronger than any bandit camp
+    const n = isl.navy, big = n.S > 30, h = n.S / 2 - 3.5, nv = (foe, lx, lz) => { const p = n.at(lx, lz); isl.spawns.push({ foe, x: p.x, z: p.z, navy: true }); };
+    (big ? [[-8, 6], [8, 6], [-11, -3], [11, -3], [0, 1], [-4, -9], [4, -9], [0, 11]] : [[-4, 3], [4, 3], [0, -2], [0, 6]]).forEach(([x, z]) => nv('soldier', x, z));
+    (big ? [[-h, h], [h, h], [-h, -h], [h, -h]] : [[-h, h], [h, h]]).forEach(([x, z]) => nv('rifleman', x, z));
+    if (big) { nv('brute', -5, -12); nv('commandant', 0, -h + 4); } else nv('captain', 0, -h + 3);
+    isl.navyVault = n.at(0, -h + 0.5);
+  }
+  if (isl.kind === 'town' && isl.navy) { /* the fort stands where a camp would be */ }
+  else if (isl.kind === 'town') {
     for (let i = 0; i < 3; i++) sp('brigand', { x: isl.camp.x + Math.sin(i * 2.1) * 5, z: isl.camp.z + Math.cos(i * 2.1) * 5 });
     isl.chests.push({ x: isl.camp.x, z: isl.camp.z, id: `${isl.id}:camp`, tier: 2 });
   } else if (isl.kind === 'ruins') {
@@ -216,20 +227,22 @@ function jungleTreeGeo() {
   for (let i = 0; i < 4; i++) m.add(box(0.07, 3.5, 0.07), 0x2f4426, [Math.sin(i * 1.7) * 2, 6.6, Math.cos(i * 1.7) * 2]); // hanging vines
   return m.build();
 }
-function fernGeo() { const m = new Mesher(); for (let i = 0; i < 6; i++) { const g = cone(0.22, 1.5, 3); g.translate(0, 0.75, 0); m.add(g, i % 2 ? 0x4f7a3a : 0x3f6a34, [0, 0, 0], [0.9, (i / 6) * TAU, 0], 1, 0.15); } return m.build(); }
-function deadTreeGeo() { const m = new Mesher(); m.add(cyl(0.12, 0.3, 5, 5), 0x6a6258, [0, 2.5, 0], [0, 0, 0.1]); m.add(cyl(0.05, 0.1, 2.4, 4), 0x6a6258, [0.9, 4, 0], [0, 0, -0.9]); m.add(cyl(0.05, 0.1, 2, 4), 0x6a6258, [-0.6, 3.4, 0.2], [0.3, 0, 0.8]); return m.build(); }
+function fernGeo() { const m = new Mesher(); for (let i = 0; i < 11; i++) { const g = cone(0.2, 1.3, 3); g.scale(1, 1, 0.35); g.translate(0, 0.65, 0); m.add(g, i % 2 ? 0x4f7a3a : 0x3f6a34, [0, 0.05, 0], [i < 6 ? 1.05 : 0.5, (i / (i < 6 ? 6 : 5)) * TAU + (i < 6 ? 0 : 0.5), 0], i < 6 ? 1 : 0.8, 0.1); } m.add(ball(0.22), 0x35502d, [0, 0.12, 0], [0, 0, 0], [1, 0.6, 1]); return m.build(); }
+function deadTreeGeo() { const m = new Mesher(), c = 0x8a8072; m.add(cyl(0.1, 0.32, 5.4, 6), c, [0, 2.7, 0], [0, 0, 0.08]); const br = [[0.9, 4.2, 0, -0.9, 2.6], [-0.7, 3.5, 0.2, 0.8, 2.2], [0.3, 4.9, -0.6, -0.4, 1.9], [-0.5, 5.2, 0.4, 0.5, 1.7], [0.6, 3.0, 0.5, -1.2, 1.5]]; for (const [x, y, z, rz, L] of br) { m.add(cyl(0.03, 0.09, L, 4), c, [x, y, z], [z, 0, rz]); m.add(cyl(0.015, 0.04, L * 0.6, 3), c, [x + Math.sin(-rz) * L * 0.55, y + L * 0.5, z], [z * 2, 0, rz * 0.4]); } return m.build(); }
 function rockGeo() { const m = new Mesher(); m.add(new THREE.DodecahedronGeometry(1, 0), 0x77706a, [0, 0.3, 0], [0.4, 0.2, 0.1], [1, 0.7, 0.85], 0.1); return m.build(); }
 function bushGeo() { const m = new Mesher(); m.add(ball(1), 0x4a6232, [0, 0.45, 0], [0, 0, 0], [1, 0.6, 1], 0.14); m.add(ball(0.7), 0x3c5530, [0.7, 0.35, 0.3], [1, 1, 0], [1, 0.6, 1], 0.14); return m.build(); }
 
-function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR) {
+function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
   const mesh = new THREE.InstancedMesh(geo, MAT, count), d = new THREE.Object3D(), R = isl.rand;
   let n = 0;
   for (let i = 0; i < count; i++) {
     const p = isl.spot(minH, maxH, 5);
     if (p.x === isl.x && p.z === isl.z) continue;
+    if (!block && isl.blocks.some((b) => Math.hypot(p.x - b.x, p.z - b.z) < b.r + 1.6)) continue; // never plant inside a boulder or a wall
     d.position.set(p.x, heightAt(p.x, p.z) - 0.05, p.z); d.rotation.set(0, R() * TAU, 0); d.scale.setScalar(lerp(sMin, sMax, R())); d.updateMatrix();
     mesh.setMatrixAt(n++, d.matrix);
     if (colR) isl.colliders.push({ x: p.x, z: p.z, r: colR * d.scale.x });
+    if (block) isl.blocks.push({ x: p.x, z: p.z, r: d.scale.x });
   }
   mesh.count = n; mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
   group.add(mesh);
@@ -278,41 +291,136 @@ function pier(m, isl) {
   m.add(box(1.1, 0.2, 3.1), PAL.darkTimber, [b.x + c * 2.6, 0.36, b.z - s * 2.6], [0, p.ang, 0]);
 }
 
+// A painted board that hangs over a shop door, so every building says what it is.
+const signTex = new Map();
+function signSprite(text) {
+  let t = signTex.get(text);
+  if (!t) { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d'); c.fillStyle = '#2a1d14'; c.fillRect(0, 0, 256, 64); c.strokeStyle = '#b58a2e'; c.lineWidth = 4; c.strokeRect(4, 4, 248, 56); c.fillStyle = '#e9c46a'; c.font = '700 30px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, 128, 34); t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; signTex.set(text, t); }
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t })); s.scale.set(4.4, 1.1, 1); return s;
+}
+const frameAt = (p, rot) => { const fx = Math.sin(rot), fz = Math.cos(rot), y = heightAt(p.x, p.z); return (lx, ly, lz) => [p.x + fx * lz + fz * lx, y + ly, p.z + fz * lz - fx * lx]; };
+function road(m, isl, u0, v0, u1, v1, w, col = 0x8a857a) {
+  const a = isl.local(u0, v0), b = isl.local(u1, v1), len = Math.hypot(b.x - a.x, b.z - a.z), x = (a.x + b.x) / 2, z = (a.z + b.z) / 2;
+  m.add(box(w, 0.14, len + w * 0.5), col, [x, heightAt(x, z) + 0.05, z], [0, Math.atan2(b.x - a.x, b.z - a.z), 0], 1, 0.03, col === 0x80684c ? 'planks' : 'stone');
+}
+function torchPost(m, x, z) { const y = heightAt(x, z); m.add(cyl(0.07, 0.1, 2.4, 5), PAL.darkTimber, [x, y + 1.2, z]); m.add(cone(0.22, 0.5, 5), 0xff9a3c, [x, y + 2.65, z], [0, 0, 0], 1, 0, 'plain'); }
+
 function town(m, isl, group) {
-  const L = isl.local, theme = isl.id === 'regal' ? { wall: PAL.white, roof: PAL.tile, alt: PAL.stone } : isl.id === 'shoals' ? { wall: PAL.darkTimber, roof: 0x2d2b2a, alt: PAL.timber } : { wall: PAL.plaster, roof: PAL.slate, alt: PAL.timber };
-  const npc = (kind, name, role, b, look) => {
-    const fig = staticFigure(look); fig.position.set(b.front.x, heightAt(b.front.x, b.front.z), b.front.z); fig.rotation.y = b.rot; group.add(fig);
-    isl.npcs.push({ id: `${isl.id}:${kind}`, kind, name, role, x: b.front.x, z: b.front.z }); isl.colliders.push({ x: b.front.x, z: b.front.z, r: 0.5 });
+  const L = isl.local, id = isl.id, toSite = (p) => Math.atan2(isl.site.x - p.x, isl.site.z - p.z), aD = isl.land, aP = Math.atan2(isl.perp[0], isl.perp[1]);
+  const theme = id === 'regal' ? { wall: PAL.white, roof: PAL.tile, alt: PAL.stone } : id === 'shoals' ? { wall: PAL.darkTimber, roof: 0x2d2b2a, alt: PAL.timber } : { wall: PAL.plaster, roof: PAL.slate, alt: PAL.timber };
+  const names = { saltmere: { tavern: 'Mara', shipwright: 'Old Tobias', smith: 'Brenna', market: 'Quill' }, regal: { tavern: 'Mr. Finch', shipwright: 'Master Hale', market: 'Widow Ames' }, shoals: { tavern: 'One-Eye Sal', smith: 'The Dutchman', market: 'Nan' } }[id];
+  const ROLE = { tavern: ['Tavern keeper', 'keeper', 'TAVERN'], shipwright: ['Shipwright', 'wright', 'SHIPWRIGHT'], smith: ['Blacksmith', 'smith', 'BLACKSMITH'], market: ['Merchant', 'merchant', 'MARKET'] };
+  const npc = (kind, b, signY = 5.4) => {
+    const [role, look, label] = ROLE[kind], fig = staticFigure(look); fig.position.set(b.front.x, heightAt(b.front.x, b.front.z), b.front.z); fig.rotation.y = b.rot; group.add(fig);
+    isl.npcs.push({ id: `${id}:${kind}`, kind, name: names[kind], role, x: b.front.x, z: b.front.z }); isl.colliders.push({ x: b.front.x, z: b.front.z, r: 0.5 });
+    const sg = signSprite(label), sp = b.sign || b.front; sg.position.set(sp.x, heightAt(sp.x, sp.z) + signY, sp.z); group.add(sg);
   };
-  const names = { saltmere: ['Mara', 'Old Tobias', 'Brenna', 'Quill'], regal: ['Mr. Finch', 'Master Hale', 'Sgt. Dobbs', 'Widow Ames'], shoals: ['One-Eye Sal', 'Rook', 'The Dutchman', 'Nan'] }[isl.id];
-  npc('tavern', names[0], 'Tavern keeper', house(m, isl, L(-24, 0), 13, 9, 6.2, theme.wall, theme.roof, { chimney: true, sign: 0xb58a2e }), 'keeper');
-  npc('shipwright', names[1], 'Shipwright', house(m, isl, L(22, -24), 10, 7, 3.8, theme.alt, theme.roof), 'wright');
-  npc('smith', names[2], 'Blacksmith', house(m, isl, L(-4, -30), 8, 7, 3.6, PAL.stone, theme.roof, { chimney: true, sign: 0x2b2d30 }), 'smith');
-  npc('market', names[3], 'Merchant', house(m, isl, L(-2, 30), 9, 6, 3.4, theme.wall, PAL.thatch), 'merchant');
-  [[-38, 24, 7, 6, 3.4], [-40, -22, 6, 6, 3.6], [-44, 2, 6, 7, 5.6], [20, 28, 7, 5, 3.2], [36, 6, 5, 5, 3]].forEach(([u, v, w, d, h], i) => house(m, isl, L(u, v), w, d, h, i % 2 ? theme.alt : theme.wall, i % 2 ? PAL.thatch : theme.roof));
-  // well, lamps, clutter
-  const c = L(2, 0), cy = heightAt(c.x, c.z);
-  m.add(cyl(1.3, 1.4, 0.9, 8), PAL.stone, [c.x, cy + 0.45, c.z]); m.add(cyl(0.09, 0.09, 2.4, 4), PAL.timber, [c.x - 1.1, cy + 1.6, c.z]); m.add(cyl(0.09, 0.09, 2.4, 4), PAL.timber, [c.x + 1.1, cy + 1.6, c.z]); m.add(cone(1.7, 0.9, 4), PAL.slate, [c.x, cy + 3.2, c.z], [0, 0.78, 0]);
-  isl.colliders.push({ x: c.x, z: c.z, r: 1.6 });
-  [[10, 10], [10, -10], [-12, 12], [-12, -12], [30, -8]].forEach(([u, v]) => { const p = L(u, v); lamp(m, p.x, p.z); });
-  [[14, 24, 1], [15.2, 24.6, 0.8], [26, -14, 1], [-16, 6, 1], [28, -16, 0.9]].forEach(([u, v, s]) => { const p = L(u, v); barrel(m, p.x, p.z, s); });
-  [[5, 33, 1], [6.3, 33.4, 0.7], [27, -20, 1.1], [-10, -25, 0.8]].forEach(([u, v, s], i) => { const p = L(u, v); crate(m, p.x, p.z, s, i); });
-  // market awning, ship frame on the slip
-  const a = L(4, 25), ay = heightAt(a.x, a.z);
-  m.add(box(5, 0.12, 3), isl.id === 'regal' ? 0x2f5d63 : PAL.red, [a.x, ay + 2.5, a.z], [0.18, Math.atan2(isl.site.x - a.x, isl.site.z - a.z), 0]);
-  const sl = L(32, -26), sy = heightAt(sl.x, sl.z);
-  for (let i = -3; i <= 3; i++) m.add(box(0.25, 1.6 - Math.abs(i) * 0.15, 3.4 - Math.abs(i) * 0.4), PAL.plank, [sl.x + isl.perp[0] * i * 1.3, sy + 1, sl.z + isl.perp[1] * i * 1.3], [0, isl.land + Math.PI / 2, 0]);
-  m.add(box(0.4, 0.4, 9), PAL.timber, [sl.x, sy + 0.3, sl.z], [0, isl.land + Math.PI / 2, 0]);
-  if (isl.id === 'regal') { // navy watchtower with a flag
-    const t = L(-6, 0), ty = heightAt(t.x, t.z);
-    const w = L(-52, -34); m.add(cyl(3.2, 3.8, 12, 8), PAL.stone, [w.x, heightAt(w.x, w.z) + 6, w.z]); m.add(cyl(3.7, 3.7, 1.2, 8), PAL.stone, [w.x, heightAt(w.x, w.z) + 12.4, w.z]);
-    m.add(cyl(0.08, 0.08, 6, 4), PAL.timber, [w.x, heightAt(w.x, w.z) + 16, w.z]); m.add(box(2.4, 1.4, 0.06), 0x27406b, [w.x + 1.25, heightAt(w.x, w.z) + 18.2, w.z]);
-    isl.colliders.push({ x: w.x, z: w.z, r: 4 }); void t; void ty;
+  // ---- the four trades, each with a shape of its own ----
+  const tavern = (p, rot, big = 1) => { // tall, lit, barrels and a bench by the door
+    const b = house(m, isl, p, 13 * big, 9, 6.2, theme.wall, theme.roof, { chimney: true, sign: 0xb58a2e, rot }), F = frameAt(p, rot);
+    for (const sx of [-1, 1]) { const q = F(sx * 3.2, 0, 5.4); lamp(m, q[0], q[2]); const k = F(sx * 5.2, 0, 5.2); barrel(m, k[0], k[2], 1.1); }
+    m.add(box(2.4, 0.14, 0.5), PAL.timber, F(-4, 1.05, 5.6), [0, rot, 0]); m.add(box(0.14, 0.45, 0.4), PAL.darkTimber, F(-5, 0.82, 5.6), [0, rot, 0]); m.add(box(0.14, 0.45, 0.4), PAL.darkTimber, F(-3, 0.82, 5.6), [0, rot, 0]);
+    return b;
+  };
+  const smithy = (p, rot, wall = PAL.stone) => { // squat stone, big chimney, a glowing forge and an anvil under a lean-to
+    const b = house(m, isl, p, 8, 7, 3.6, wall, theme.roof, { chimney: true, rot }), F = frameAt(p, rot);
+    m.add(box(4.4, 0.16, 3.6), PAL.darkTimber, F(6.2, 3.3, 1.2), [0.12, rot, 0]); for (const [x, z] of [[8.2, 2.8], [8.2, -0.4]]) m.add(cyl(0.12, 0.12, 3.2, 5), PAL.timber, F(x, 1.6, z));
+    m.add(box(1.6, 1.3, 1.6), PAL.stone, F(5.4, 0.65, -0.2), [0, rot, 0]); m.add(box(1.0, 0.5, 0.2), 0xff7a2a, F(5.4, 0.85, 0.65), [0, rot, 0], 1, 0, 'plain'); m.add(box(1.2, 2.4, 1.2), PAL.stone, F(5.4, 2.4, -0.4), [0, rot, 0]);
+    m.add(box(0.5, 0.6, 0.5), PAL.timber, F(6.6, 0.3, 2.2), [0, rot, 0]); m.add(box(0.9, 0.3, 0.36), PAL.iron, F(6.6, 0.75, 2.2), [0, rot, 0], 1, 0, 'plain');
+    isl.colliders.push({ x: F(5.4, 0, -0.2)[0], z: F(5.4, 0, -0.2)[2], r: 1.3 });
+    return b;
+  };
+  const shipyard = (p, rot) => { // an open shed over a hull in frame, with timber stacked beside it
+    const F = frameAt(p, rot);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.add(cyl(0.18, 0.2, 5, 5), PAL.darkTimber, F(sx * 5, 2.5, sz * 3.4));
+    for (const sx of [-1, 1]) m.add(box(5.6, 0.2, 8), theme.roof, F(sx * 2.6, 5.6, 0), [0, rot, sx * -0.4], 1, 0.04);
+    m.add(box(0.4, 0.4, 9.5), PAL.timber, F(0, 0.5, 0), [0, rot + Math.PI / 2, 0]);
+    for (let i = -3; i <= 3; i++) for (const sz of [-1, 1]) m.add(box(0.22, 2.2 - Math.abs(i) * 0.2, 0.22), PAL.plank, F(i * 1.3, 1.3, sz * (1.5 - Math.abs(i) * 0.18)), [sz * -0.35, rot, 0]);
+    for (let i = 0; i < 4; i++) m.add(box(0.3, 0.3, 5), PAL.plank, F(7.4, 0.2 + (i >> 1) * 0.32, -1 + (i % 2) * 0.4), [0, rot + 0.05 * i, 0]);
+    const k = F(-7, 0, 2); barrel(m, k[0], k[2]); const k2 = F(-7.6, 0, 0.6); crate(m, k2[0], k2[2], 1, 0.3);
+    isl.colliders.push({ x: p.x, z: p.z, r: 3.2 });
+    const f = F(0, 0, 5.6); return { front: { x: f[0], z: f[2] }, rot, sign: { x: F(0, 0, 3.6)[0], z: F(0, 0, 3.6)[2] } };
+  };
+  const stalls = (p, rot, cols) => { // open stalls under bright awnings, piled with goods
+    const F = frameAt(p, rot);
+    cols.forEach((col, i) => { const x = (i - (cols.length - 1) / 2) * 5.2;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.add(cyl(0.08, 0.08, sz > 0 ? 2.5 : 3, 4), PAL.timber, F(x + sx * 2, sz > 0 ? 1.25 : 1.5, sz * 1.3));
+      m.add(box(4.6, 0.1, 3.2), col, F(x, 2.85, 0), [0.18, rot, 0], 1, 0, 'plain'); m.add(box(4, 0.16, 1.3), PAL.plank, F(x, 1.0, 0.6), [0, rot, 0]); m.add(box(3.8, 0.9, 1.1), PAL.timber, F(x, 0.5, 0.6), [0, rot, 0]);
+      for (let k = 0; k < 4; k++) m.add(ball(0.2), [0xc9a94a, 0x8a2a22, 0x4f7a3a, 0xc79a3a][(k + i) % 4], F(x - 1.2 + k * 0.8, 1.22, 0.6), [0, 0, 0], 1, 0, 'plain');
+      isl.colliders.push({ x: F(x, 0, 0.3)[0], z: F(x, 0, 0.3)[2], r: 2.1 }); });
+    const c1 = F(-cols.length * 2.6 - 1.4, 0, 0.4), c2 = F(cols.length * 2.6 + 1.2, 0, 0.2); crate(m, c1[0], c1[2], 1.1, 0.4); barrel(m, c2[0], c2[2]);
+    const f = F(0, 0, 3.4); return { front: { x: f[0], z: f[2] }, rot };
+  };
+  const homes = (list, two) => list.forEach(([u, v, w, d, h, rot], i) => house(m, isl, L(u, v), w, d, h, i % 2 ? theme.alt : theme.wall, i % 3 === 1 ? PAL.thatch : theme.roof, rot === undefined ? {} : { rot, chimney: two && i % 2 === 0 }));
+  const well = (u, v) => { const c = L(u, v), cy = heightAt(c.x, c.z); m.add(cyl(1.3, 1.4, 0.9, 8), PAL.stone, [c.x, cy + 0.45, c.z]); m.add(cyl(0.09, 0.09, 2.4, 4), PAL.timber, [c.x - 1.1, cy + 1.6, c.z]); m.add(cyl(0.09, 0.09, 2.4, 4), PAL.timber, [c.x + 1.1, cy + 1.6, c.z]); m.add(cone(1.7, 0.9, 4), PAL.slate, [c.x, cy + 3.2, c.z], [0, 0.78, 0]); isl.colliders.push({ x: c.x, z: c.z, r: 1.6 }); };
+
+  if (id === 'saltmere') { // a market village round a cobbled square
+    const c = L(0, 0); m.add(cyl(14, 14, 0.14, 18), 0x8a857a, [c.x, heightAt(c.x, c.z) + 0.05, c.z]);
+    road(m, isl, 13, 0, 47, 0, 5); road(m, isl, 0, -13, 0, -30, 3.6, 0x79756b); road(m, isl, 0, 13, 0, 28, 3.6, 0x79756b); road(m, isl, -13, 0, -22, 0, 3.6, 0x79756b);
+    well(0, 0);
+    npc('tavern', tavern(L(-28, 0), aD));
+    npc('smith', smithy(L(-3, -34), aP));
+    npc('market', stalls(L(0, 31), aP + Math.PI, [PAL.red, 0xc9a94a, 0x2f5d63]), 4.6);
+    npc('shipwright', shipyard(L(36, -24), aP), 7.2);
+    homes([[-38, 24, 7, 6, 3.4], [-40, -22, 6, 6, 3.6], [-17, 20, 6, 6, 3.4], [-18, -19, 6, 5, 3.2], [20, 22, 7, 5, 3.2], [36, 12, 5, 5, 3], [19, -16, 6, 5, 3.3]]);
+    [[10, 10], [10, -10], [-10, 10], [-10, -10], [30, 4]].forEach(([u, v]) => { const p = L(u, v); lamp(m, p.x, p.z); });
+    [[14, 24, 1], [26, -14, 1], [-16, 6, 1]].forEach(([u, v, s]) => { const p = L(u, v); barrel(m, p.x, p.z, s); });
+  } else if (id === 'regal') { // a proper navy town: paved streets on a grid, a church, the governor's house
+    road(m, isl, 47, 0, -30, 0, 7, 0x9a958a); road(m, isl, 8, -40, 8, 40, 6, 0x9a958a); road(m, isl, -18, -30, -18, 30, 4.5, 0x8a857a);
+    const f = L(8, 0), fy = heightAt(f.x, f.z); m.add(cyl(3, 3.2, 0.7, 10), PAL.stone, [f.x, fy + 0.4, f.z]); m.add(cyl(2.6, 2.6, 0.1, 10), 0x4f8f9a, [f.x, fy + 0.72, f.z], [0, 0, 0], 1, 0, 'plain'); m.add(cyl(0.3, 0.45, 2.4, 6), PAL.stone, [f.x, fy + 1.6, f.z]); m.add(ball(0.55), PAL.stone, [f.x, fy + 3, f.z]); isl.colliders.push({ x: f.x, z: f.z, r: 3.3 });
+    npc('tavern', tavern(L(22, -12.5), aP));
+    npc('market', stalls(L(22, 13), aP + Math.PI, [0x27406b, PAL.white, 0x27406b, PAL.red]), 4.6);
+    npc('shipwright', shipyard(L(40, -27), aP), 7.2);
+    // the governor's house, with a columned porch and the flag
+    const g = L(-40, 0); house(m, isl, g, 18, 10, 7.4, PAL.white, PAL.tile, { rot: aD, chimney: true }); const G = frameAt(g, aD);
+    for (let i = -2; i <= 2; i++) if (i) m.add(cyl(0.34, 0.38, 6, 8), PAL.white, G(i * 2.6, 3.6, 6.6)); m.add(box(13, 0.5, 2.4), PAL.white, G(0, 6.8, 6.2), [0, aD, 0]); m.add(box(13, 0.3, 2.6), PAL.stone, G(0, 0.5, 6.2), [0, aD, 0]);
+    m.add(cyl(0.08, 0.08, 7, 4), PAL.timber, G(0, 14, 0)); m.add(box(2.6, 1.5, 0.06), 0x27406b, G(1.4, 16.6, 0), [0, aD, 0], 1, 0, 'plain');
+    // church with a steeple
+    const ch = L(-32, -27); house(m, isl, ch, 8, 14, 6, PAL.white, PAL.slate, { rot: aD }); const C = frameAt(ch, aD);
+    m.add(box(4, 13, 4), PAL.white, C(0, 7, 8.2), [0, aD, 0], 1, 0.03); m.add(cone(3.2, 6, 4), PAL.slate, C(0, 16.5, 8.2), [0, aD + 0.78, 0]); m.add(box(0.14, 1.6, 0.14), PAL.iron, C(0, 20.2, 8.2)); m.add(box(0.9, 0.14, 0.14), PAL.iron, C(0, 20.4, 8.2), [0, aD, 0]);
+    isl.colliders.push({ x: C(0, 0, 8.2)[0], z: C(0, 0, 8.2)[2], r: 2.6 });
+    // terraced townhouses facing the streets
+    homes([[-3, -12, 7, 7, 6.4, aP], [-10.5, -12, 7, 7, 6, aP], [-3, 12, 7, 7, 6, aP + Math.PI], [-10.5, 12, 7, 7, 6.4, aP + Math.PI], [-26, 12, 7, 7, 6, aP + Math.PI], [34, 12.5, 8, 7, 5.6, aP + Math.PI], [34, -12.5, 9, 7, 4.2, aP],
+      [17, -30, 7, 6, 5.8, aD + Math.PI], [-1, -30, 7, 6, 5.8, aD], [17, 30, 7, 6, 5.8, aD + Math.PI], [-1, 30, 7, 6, 5.8, aD], [-30, 28, 7, 6, 3.6, aD]], true);
+    for (let u = -24; u <= 40; u += 16) for (const v of [-4.6, 4.6]) { if (Math.abs(u - 8) < 5) continue; const p = L(u, v); lamp(m, p.x, p.z); }
+    [[41, 8, 1], [42.2, 9, 0.8], [28, -22, 1]].forEach(([u, v, s]) => { const p = L(u, v); barrel(m, p.x, p.z, s); }); [[44, 10, 1.1], [30, -24, 0.9]].forEach(([u, v, s], i) => { const p = L(u, v); crate(m, p.x, p.z, s, i); });
+  } else { // Black Shoals: a smugglers' shanty of boardwalks, crooked shacks and a tavern in a beached wreck
+    const PL = 0x80684c; road(m, isl, 47, 0, 20, 4, 3.4, PL); road(m, isl, 20, 4, 0, -6, 3.2, PL); road(m, isl, 0, -6, -22, 2, 3, PL); road(m, isl, 0, -6, -4, -27, 2.8, PL); road(m, isl, 20, 4, 23, 24, 2.8, PL);
+    const tp = L(-30, 4), tb = tavern(tp, aD, 1.15), T = frameAt(tp, aD); // the wreck: a bow, a broken mast, rags of sail
+    m.add(cone(4.6, 9, 4), PAL.darkTimber, T(-11.5, 3.4, 0), [0, aD, Math.PI / 2], [1, 1, 0.9], 0.05); m.add(cyl(0.28, 0.36, 15, 6), PAL.timber, T(3, 12, -1), [0.06, 0, 0.1]); m.add(cyl(0.1, 0.12, 8, 4), PAL.timber, T(3, 15, -1), [0, aD, Math.PI / 2 + 0.2]); m.add(box(5, 3.4, 0.06), 0x8a8474, T(3.4, 13, -0.9), [0, aD, 0.2], 1, 0.1, 'plain');
+    npc('tavern', tb);
+    npc('smith', smithy(L(-6, -33), aP, PAL.darkTimber));
+    npc('market', stalls(L(24, 29), aP + Math.PI, [0x2d2b2a, 0x5a1512]), 4.6);
+    const R = isl.rand; [[12, -14, 5, 5, 3], [24, -10, 5, 4, 2.8], [-14, -14, 5, 5, 3], [-14, 16, 6, 5, 3], [4, 14, 5, 4, 2.8], [-38, -18, 5, 5, 3.2], [36, 14, 4, 5, 2.8], [8, 30, 5, 4, 2.8], [-26, 26, 5, 5, 3]].forEach(([u, v, w, d, h], i) => { const p = L(u, v); house(m, isl, p, w, d, h, i % 2 ? PAL.timber : PAL.darkTimber, i % 3 ? PAL.thatch : 0x2d2b2a, { rot: toSite(p) + (R() - 0.5) * 1.2, dark: i % 4 === 0 }); });
+    const bf = L(-9, 7), by = heightAt(bf.x, bf.z); m.add(cyl(1.3, 1.5, 0.3, 8), PAL.darkRock, [bf.x, by + 0.15, bf.z]); m.add(cone(0.9, 1.5, 6), 0xff9a3c, [bf.x, by + 0.9, bf.z], [0, 0, 0], 1, 0, 'plain'); for (let i = 0; i < 3; i++) m.add(box(0.2, 0.2, 1.8), PAL.darkTimber, [bf.x, by + 0.4, bf.z], [0.5, i * 2.1, 0]); isl.colliders.push({ x: bf.x, z: bf.z, r: 1.5 });
+    [[18, 8], [2, -10], [-20, -2], [-6, -22], [22, 20], [40, 3]].forEach(([u, v]) => { const p = L(u, v); torchPost(m, p.x, p.z); });
+    for (let i = 0; i < 3; i++) { const p = L(30 + i * 3.2, -20), y = heightAt(p.x, p.z); m.add(cyl(0.07, 0.07, 2.6, 4), PAL.timber, [p.x, y + 1.3, p.z]); if (i) m.add(box(3.2, 1.4, 0.04), 0x6a6a58, [p.x - isl.dir[0] * 1.6, y + 1.8, p.z - isl.dir[1] * 1.6], [0, aD + Math.PI / 2, 0], 1, 0.12, 'plain'); } // drying nets
+    [[14, 2, 1], [15, 3.2, 0.8], [-2, -20, 1], [26, 18, 1]].forEach(([u, v, s]) => { const p = L(u, v); barrel(m, p.x, p.z, s); }); [[10, -4, 1], [-18, 8, 0.9], [27, 16, 1.1]].forEach(([u, v, s], i) => { const p = L(u, v); crate(m, p.x, p.z, s, i); });
   }
+  if (isl.navy) return;
   // bandit camp
   const k = isl.camp, ky = heightAt(k.x, k.z);
   m.add(cone(2.4, 2.6, 4), 0x6f6448, [k.x + 5, ky + 1.3, k.z + 2], [0, 0.5, 0]); m.add(cone(2.2, 2.4, 4), 0x5d5540, [k.x - 4, ky + 1.2, k.z + 4], [0, 1.2, 0]);
   m.add(cone(0.7, 0.9, 5), 0xff9a3c, [k.x + 1.5, ky + 0.45, k.z - 3], [0, 0, 0], 1, 0); m.add(cyl(1, 1.1, 0.25, 7), PAL.darkRock, [k.x + 1.5, ky + 0.1, k.z - 3]);
+}
+
+// A stone navy fort: curtain walls, corner towers, a gate, barracks and guns. The strongroom is at the back.
+function navyFort(m, isl, group) {
+  const n = isl.navy, S = n.S, h = S / 2, F = frameAt({ x: n.x, z: n.z }, n.rot), big = S > 30, wallH = big ? 6.5 : 5;
+  const wall = (lx, lz, len, along) => { m.add(box(along ? len : 1.8, wallH, along ? 1.8 : len), PAL.stone, F(lx, wallH / 2, lz), [0, n.rot, 0], 1, 0.04); for (let t = -len / 2 + 0.9; t < len / 2; t += 2.4) m.add(box(along ? 1.2 : 2, 0.9, along ? 2 : 1.2), PAL.stone, F(lx + (along ? t : 0), wallH + 0.45, lz + (along ? 0 : t)), [0, n.rot, 0]);
+    for (let t = -len / 2 + 0.8; t <= len / 2; t += 1.7) { const q = F(lx + (along ? t : 0), 0, lz + (along ? 0 : t)); isl.colliders.push({ x: q[0], z: q[2], r: 1.1 }); } };
+  wall(0, -h, S, true); wall(-h, 0, S, false); wall(h, 0, S, false);
+  const gw = (S - 6) / 2; wall(-(3 + gw / 2), h, gw, true); wall(3 + gw / 2, h, gw, true); // the gate gap faces the island
+  m.add(box(6.4, 1.2, 2.2), PAL.stone, F(0, wallH + 0.2, h), [0, n.rot, 0]); m.add(box(2.6, 4.6, 0.3), PAL.darkTimber, F(-4.2, 2.3, h + 1.6), [0, n.rot + 0.9, 0]);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const q = F(sx * h, 0, sz * h); m.add(cyl(3, 3.4, wallH + 3, 10), PAL.stone, [q[0], q[1] + (wallH + 3) / 2, q[2]]); m.add(cyl(3.5, 3.5, 1, 10), PAL.darkRock, [q[0], q[1] + wallH + 3.4, q[2]]); isl.colliders.push({ x: q[0], z: q[2], r: 3.5 }); }
+  const fl = F(-h, 0, h); m.add(cyl(0.09, 0.09, 7, 4), PAL.timber, [fl[0], fl[1] + wallH + 7, fl[2]]); m.add(box(2.8, 1.6, 0.06), 0x27406b, [fl[0] + 1.5, fl[1] + wallH + 9.6, fl[2]], [0, 0, 0], 1, 0, 'plain');
+  // barracks and the strongroom
+  const bp = F(big ? -9 : -4.5, 0, big ? -4 : -1); house(m, isl, { x: bp[0], z: bp[2] }, big ? 9 : 6, big ? 14 : 7, 3.6, PAL.stone, PAL.slate, { rot: n.rot + Math.PI / 2 });
+  if (big) { const b2 = F(10, 0, -3); house(m, isl, { x: b2[0], z: b2[2] }, 8, 10, 3.6, PAL.stone, PAL.slate, { rot: n.rot - Math.PI / 2, chimney: true }); }
+  // guns on the seaward wall, shot piled by them
+  for (let i = -1; i <= 1; i++) { if (!big && i) continue; const q = F(i * 7, 0, -h + 3.4); m.add(cyl(0.3, 0.38, 2.6, 7), PAL.iron, [q[0], q[1] + 0.8, q[2]], [Math.PI / 2 - 0.08, n.rot + Math.PI, 0], 1, 0, 'plain'); m.add(box(1.1, 0.5, 1.6), PAL.timber, [q[0], q[1] + 0.35, q[2]], [0, n.rot, 0]); const b = F(i * 7 + 1.4, 0, -h + 4.4); for (let k = 0; k < 3; k++) m.add(ball(0.2), PAL.iron, [b[0] + k * 0.36, b[1] + 0.2, b[2]], [0, 0, 0], 1, 0, 'plain'); isl.colliders.push({ x: q[0], z: q[2], r: 1 }); }
+  const sg = signSprite(n.name.toUpperCase()), gp = F(0, 0, h + 1); sg.position.set(gp[0], gp[1] + wallH + 2.6, gp[2]); group.add(sg);
+  for (const sx of [-1, 1]) { const q = F(sx * 4.4, 0, h + 2.4); torchPost(m, q[0], q[2]); }
 }
 
 function fort(m, isl) {
@@ -491,16 +599,18 @@ export function createWorld(scene) {
     if (isl.kind === 'fort') fort(m, isl);
     if (isl.kind === 'ruins') ruins(m, isl);
     if (isl.kind === 'crab') crabNest(m, isl);
-    g.add(m.mesh());
+    if (isl.navy) navyFort(m, isl, g);
     const dense = isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1;
+    g.add(m.mesh());
+    isl.blocks = isl.colliders.filter((c) => c.r > 1.4).map((c) => ({ x: c.x, z: c.z, r: c.r }));
+    scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.62, true);
+    scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 0.7, true); // crags up high
     scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35);
     if (isl.r > 100) scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5);
-    scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.9);
     scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0);
-    scatter(g, isl, fern, Math.round(isl.r * 0.5 * dense), 1.8, 40, 0.6, 1.4, 0);
+    scatter(g, isl, fern, Math.round(isl.r * 0.28 * dense), 1.8, 40, 0.8, 1.5, 0);
     if (isl.jungle) scatter(g, isl, jtree, Math.round(isl.r * 0.42), 4, isl.h * 1.4, 0.8, 1.5, 0.5);
     if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') scatter(g, isl, dead, 8, 1.5, 40, 0.8, 1.4, 0.3);
-    scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 2.2); // crags up high
     if (isl.caveAt) { const c = isl.caveAt, cy = heightAt(c.x, c.z), k = new Kit(KINDS); // cave mouth
       for (const [dx, sc] of [[-2.6, 2.6], [2.6, 2.8], [0, 2.2]]) k.add(new THREE.DodecahedronGeometry(1, 0), PAL.darkRock, [c.x + dx, cy + (dx ? 1.6 : 4.4), c.z], [dx, dx * 2, 0.3], [sc, dx ? sc * 1.3 : 1.4, sc], 0.1, 'plain');
       k.add(box(3.4, 3.6, 0.6), 0x050505, [c.x, cy + 1.7, c.z - 0.9], [0, 0, 0], 1, 0, 'plain'); g.add(k.mesh()); isl.colliders.push({ x: c.x, z: c.z - 1.6, r: 2.2 }); }

@@ -17,6 +17,8 @@ const LOOKS = {
   brute: { coat: null, shirt: null, pants: 0x33302b, boots: 0x16120f, hat: 'none', bulk: 1.3, sash: 0x6b1c18, weapon: 'axe' },
   captain: { coat: 0x5a1512, shirt: 0xc4b99d, pants: 0x1c1a19, boots: 0x0f0d0c, hat: 'tricorn', hatC: 0x0f0f10, tails: true, sash: 0xb58a2e, weapon: 'cutlass', blade: 0xd8dcdf },
   soldier: { coat: 0x27406b, shirt: 0x27406b, pants: 0xc4bca6, boots: 0x16120f, hat: 'shako', hatC: 0x14161a, sash: 0xc4bca6, weapon: 'cutlass' },
+  rifleman: { coat: 0x27406b, shirt: 0x27406b, pants: 0xc4bca6, boots: 0x16120f, hat: 'shako', hatC: 0x14161a, sash: 0xc4bca6, weapon: 'musket' },
+  commandant: { coat: 0x1c2f52, shirt: 0xd2c9b4, pants: 0xd2c9b4, boots: 0x0f0d0c, hat: 'tricorn', hatC: 0x0f0f10, tails: true, sash: 0xc9a94a, weapon: 'cutlass', blade: 0xd8dcdf },
   skeleton: { bone: true, thin: 0.5, pants: 0x34352c, hat: 'rag', hatC: 0x3d2a26, weapon: 'cutlass', blade: 0x7a6a58 },
   keeper: { coat: 0x6b3a30, shirt: 0xc4b99d, pants: 0x3b3a36, boots: 0x1c1713, hat: 'none', hair: 0x5a2d1c, apron: 0xb9b09a },
   wright: { coat: null, shirt: 0x8c7a5a, pants: 0x4a3b2c, boots: 0x1c1713, hat: 'wide', hatC: 0x6e5a40, apron: 0x5c4733 },
@@ -29,10 +31,11 @@ const mats = new Map();
 const mat = (c) => { let m = mats.get(c); if (!m) { m = new THREE.MeshLambertMaterial({ color: c, flatShading: true }); mats.set(c, m); } return m; };
 const geos = new Map();
 const G = (key, make) => { let g = geos.get(key); if (!g) { g = make(); geos.set(key, g); } return g; };
-const limb = (rt, rb, len) => G(`l${rt.toFixed(3)}:${rb.toFixed(3)}:${len}`, () => new THREE.CylinderGeometry(rt, rb, len, 6).translate(0, -len / 2, 0));
+const limb = (rt, rb, len) => G(`l${rt.toFixed(3)}:${rb.toFixed(3)}:${len}`, () => new THREE.CylinderGeometry(rt, rb, len, 8).translate(0, -len / 2, 0));
 const bx = (w, h, d, ox = 0, oy = 0, oz = 0) => G(`b${w}:${h}:${d}:${ox}:${oy}:${oz}`, () => new THREE.BoxGeometry(w, h, d).translate(ox, oy, oz));
 const part = (g, color, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(g, mat(color)); m.position.set(x, y, z); parent.add(m); return m; };
 const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+const FLAME = new THREE.MeshBasicMaterial({ color: 0xffb040, fog: false });
 const SHADOW = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 
 function weaponMesh(kind, parent, blade = 0xb9bdc1) {
@@ -100,7 +103,14 @@ export function buildCharacter(lookName, opts = {}) {
   else part(G(`pelvis${bulk}:${thin}`, () => new THREE.CylinderGeometry(0.2 * bulk * (L.bone ? 0.5 : 1), 0.19 * bulk * (L.bone ? 0.6 : 1), 0.2, 6).scale(1, 1, 0.62)), L.pants, P.hips, 0, -0.08, 0);
   // head
   P.head = joint(P.torso, 0, 0.6, 0);
-  part(G('head', () => new THREE.IcosahedronGeometry(0.125, 1).scale(1, 1.14, 1.04)), skin, P.head, 0, 0.13, 0);
+  part(G('head', () => new THREE.IcosahedronGeometry(0.125, 2).scale(0.96, 1.14, 1.04)), skin, P.head, 0, 0.13, 0);
+  if (!L.bone) { // a face: eyes, brow, nose, jaw
+    for (const sx of [-1, 1]) { part(bx(0.03, 0.022, 0.02), 0x14100c, P.head, sx * 0.046, 0.152, 0.118); part(bx(0.05, 0.014, 0.02), 0x2a1d14, P.head, sx * 0.046, 0.178, 0.117); part(G('ear', () => new THREE.IcosahedronGeometry(0.028, 0)), skin, P.head, sx * 0.122, 0.135, 0.0); }
+    part(G('nose', () => new THREE.ConeGeometry(0.02, 0.055, 4).rotateX(-0.35)), skin, P.head, 0, 0.125, 0.135);
+    part(bx(0.05, 0.01, 0.02), 0x5a2f28, P.head, 0, 0.075, 0.118);
+    part(G('jaw', () => new THREE.IcosahedronGeometry(0.085, 1).scale(1, 0.7, 0.95)), skin, P.head, 0, 0.065, 0.025);
+    if (L.hat && L.hat !== 'none' && !L.hair) part(G('nape', () => new THREE.IcosahedronGeometry(0.11, 1).scale(1, 0.95, 0.8)), 0x2a1d14, P.head, 0, 0.115, -0.05);
+  }
   if (L.bone) { part(bx(0.05, 0.05, 0.03), 0x101010, P.head, -0.045, 0.15, 0.115); part(bx(0.05, 0.05, 0.03), 0x101010, P.head, 0.045, 0.15, 0.115); part(bx(0.1, 0.06, 0.08), skin, P.head, 0, 0.02, 0.07); }
   if (L.hair) part(G('hair', () => new THREE.IcosahedronGeometry(0.135, 1).scale(1, 0.9, 1.05)), L.hair, P.head, 0, 0.17, -0.02);
   if (L.hat === 'tricorn') { part(G('tri', () => new THREE.CylinderGeometry(0.31, 0.27, 0.05, 3).rotateY(Math.PI)), L.hatC, P.head, 0, 0.235, 0); part(G('tricrown', () => new THREE.CylinderGeometry(0.115, 0.135, 0.11, 6)), L.hatC, P.head, 0, 0.3, 0); }
@@ -110,7 +120,7 @@ export function buildCharacter(lookName, opts = {}) {
   // arms
   const arm = (sx) => {
     const a = joint(P.torso, sx * 0.3 * bulk * (L.bone ? 0.8 : 1), 0.52, 0);
-    part(limb(0.075 * thin * bulk, 0.062 * thin * bulk, 0.3), sleeve, a);
+    part(limb(0.075 * thin * bulk, 0.062 * thin * bulk, 0.3), sleeve, a); part(G(`sh${thin}:${bulk}`, () => new THREE.IcosahedronGeometry(0.088 * thin * bulk, 1)), sleeve, a); part(G(`el${thin}:${bulk}`, () => new THREE.IcosahedronGeometry(0.062 * thin * bulk, 1)), sleeve, a, 0, -0.3, 0);
     const f = joint(a, 0, -0.3, 0); part(limb(0.058 * thin * bulk, 0.05 * thin * bulk, 0.27), L.coat ? sleeve : skin, f);
     part(G('hand', () => new THREE.IcosahedronGeometry(0.055, 0)), skin, f, 0, -0.3, 0);
     return [a, f, joint(f, 0, -0.31, 0)];
@@ -118,9 +128,13 @@ export function buildCharacter(lookName, opts = {}) {
   [P.armR, P.foreR, P.weapon] = arm(-1); [P.armL, P.foreL, P.gun] = arm(1);
   if (L.weapon) weaponMesh(L.weapon, P.weapon, opts.blade ?? L.blade);
   if (L.gun) { weaponMesh('pistol', P.gun); P.gun.visible = false; }
+  // a torch for the off hand (the left), lit in caves and after dark
+  P.torch = joint(P.foreL, 0, -0.31, 0); P.torch.visible = false;
+  if (opts.torch) { part(G('tstick', () => new THREE.CylinderGeometry(0.022, 0.028, 0.6, 5).translate(0, 0.2, 0)), 0x4a3420, P.torch); part(G('twrap', () => new THREE.CylinderGeometry(0.045, 0.035, 0.12, 6).translate(0, 0.5, 0)), 0x2a2420, P.torch); P.flame = new THREE.Mesh(G('tflame', () => new THREE.ConeGeometry(0.075, 0.26, 6).translate(0, 0.68, 0)), FLAME); P.torch.add(P.flame); P.tip = joint(P.torch, 0, 0.75, 0); }
   // legs
   const leg = (sx) => {
     const l = joint(inner, sx * 0.11 * bulk, 0.92, 0); part(limb(0.1 * thin * bulk, 0.078 * thin * bulk, 0.46), L.pants, l);
+    part(G(`kn${thin}:${bulk}`, () => new THREE.IcosahedronGeometry(0.08 * thin * bulk, 1)), L.pants, l, 0, -0.46, 0);
     const s = joint(l, 0, -0.46, 0); part(limb(0.074 * thin * bulk, 0.062 * thin * bulk, 0.42), L.bone ? skin : L.boots, s); part(bx(0.12, 0.08, 0.25, 0, 0, 0.05), L.bone ? skin : L.boots, s, 0, -0.42, 0);
     return [l, s];
   };
@@ -138,9 +152,9 @@ export function buildCharacter(lookName, opts = {}) {
   }
   if (!opts.noShadow) { const sh = new THREE.Mesh(G('shadow', () => new THREE.CircleGeometry(0.5, 12).rotateX(-Math.PI / 2)), SHADOW); sh.position.y = 0.04; root.add(sh); }
 
-  const armed = !!L.weapon, c = { root, P, anim: { state: 'idle', u: 0, i: 0, ph: 0, t: 0, speed: 0 }, height: 1.85 };
+  const armed = !!L.weapon, c = { root, P, anim: { state: 'idle', u: 0, i: 0, ph: 0, t: Math.random() * 20, speed: 0 }, height: 1.85, torch: false };
   const cur = {}, T = {};
-  const KEYS = ['hipY', 'tX', 'tY', 'aRx', 'aRz', 'fRx', 'wRx', 'wRz', 'aLx', 'aLz', 'fLx', 'lLx', 'lRx', 'sLx', 'sRx'];
+  const KEYS = ['hipY', 'tX', 'tY', 'aRx', 'aRz', 'fRx', 'wRx', 'wRz', 'aLx', 'aLz', 'fLx', 'lLx', 'lRx', 'sLx', 'sRx', 'hipZ', 'tZ', 'hX', 'hY'];
   for (const k of KEYS) cur[k] = 0;
   const ATK = [ // [windup pose, follow-through pose]
     [{ tY: -0.85, aRx: -1.35, aRz: -0.95, fRx: -0.35, wRx: 1.5 }, { tY: 0.9, tX: 0.15, aRx: -1.25, aRz: 0.75, fRx: -0.15, wRx: 1.6 }],
@@ -152,28 +166,39 @@ export function buildCharacter(lookName, opts = {}) {
     const a = c.anim; a.t += dt;
     for (const k of KEYS) T[k] = GUARD[k] || 0;
     let rate = 16;
-    if (a.state === 'idle') { T.tX = Math.sin(a.t * 1.7) * 0.02; T.hipY = Math.sin(a.t * 1.7) * 0.008; }
-    else if (a.state === 'run') {
-      a.ph += dt * (4.2 + a.speed * 1.55); const s = Math.sin(a.ph), k = clamp(a.speed / 5, 0.35, 1.1);
-      T.lLx = -s * 0.95 * k; T.lRx = s * 0.95 * k; T.sLx = Math.max(0, Math.cos(a.ph)) * 1.2 * k; T.sRx = Math.max(0, -Math.cos(a.ph)) * 1.2 * k;
-      T.aLx = s * 0.7 * k; T.fLx = -0.5; T.tX = 0.16 * k; T.tY = s * 0.12; T.hipY = Math.abs(Math.cos(a.ph)) * 0.05 - 0.03;
-      if (!armed) { T.aRx = -s * 0.7 * k; T.fRx = -0.5; } else T.aRx += -s * 0.15;
-      rate = 22;
+    if (a.state === 'idle') { // breathe, shift weight from foot to foot, look about
+      const br = Math.sin(a.t * 1.6), sw = Math.sin(a.t * 0.5);
+      T.tX = br * 0.03 + 0.02; T.hipY = br * 0.01 - Math.abs(sw) * 0.012; T.tZ = sw * 0.045; T.hipZ = -sw * 0.05; T.lLx = sw * 0.05; T.lRx = -sw * 0.05;
+      T.hY = Math.sin(a.t * 0.31) * 0.4 + Math.sin(a.t * 0.83) * 0.12; T.hX = Math.sin(a.t * 0.23) * 0.07;
+      T.aLx += br * 0.04 + sw * 0.05; T.aLz += br * 0.02; T.fLx += -0.12 - br * 0.04; if (!armed) { T.aRx += br * 0.04 - sw * 0.05; T.fRx += -0.12; }
+      rate = 7;
+    } else if (a.state === 'run') { // legs drive, hips roll, shoulders counter-twist, the head stays level
+      a.ph += dt * (4.2 + a.speed * 1.55); const s = Math.sin(a.ph), co = Math.cos(a.ph), k = clamp(a.speed / 5, 0.35, 1.1);
+      T.lLx = -s * 0.95 * k; T.lRx = s * 0.95 * k; T.sLx = Math.max(0, co) * 1.35 * k + 0.08; T.sRx = Math.max(0, -co) * 1.35 * k + 0.08;
+      T.aLx = s * 0.85 * k; T.fLx = -0.55 - Math.max(0, s) * 0.45 * k; T.aLz = 0.1;
+      T.tX = 0.17 * k; T.tY = s * 0.22 * k; T.tZ = -s * 0.05 * k; T.hipZ = s * 0.07 * k; T.hY = -s * 0.2 * k; T.hX = -0.12 * k;
+      T.hipY = Math.abs(co) * 0.065 * k - 0.045;
+      if (!armed) { T.aRx = -s * 0.85 * k; T.fRx = -0.55 - Math.max(0, -s) * 0.45 * k; T.aRz = -0.1; } else { T.aRx += -s * 0.3 * k; T.fRx += Math.max(0, -s) * -0.2; }
+      rate = 18;
     } else if (a.state === 'attack') {
       const [w, f] = ATK[a.i % 3], u = a.u; rate = 30;
       const set = (pose, amt) => { for (const k in pose) T[k] = lerp(T[k], pose[k], amt); };
       if (u < 0.3) set(w, smooth(0, 0.3, u)); else { set(w, 1); set(f, smooth(0.3, 0.5, u)); const back = smooth(0.62, 1, u); for (const k of KEYS) T[k] = lerp(T[k], GUARD[k] || 0, back); }
-      T.lLx = -0.35; T.lRx = 0.3; T.sRx = 0.25; T.hipY = -0.05;
+      T.lLx = -0.45; T.lRx = 0.35; T.sRx = 0.3; T.sLx = 0.15; T.hipY = -0.07; T.hY = -T.tY * 0.6; T.tZ = T.tY * 0.08;
     } else if (a.state === 'block') { T.aRx = -1.25; T.aRz = 0.55; T.fRx = -1.3; T.wRx = 0.5; T.wRz = 1.1; T.tX = 0.06; T.hipY = -0.06; T.lLx = -0.25; T.lRx = 0.2; rate = 26; }
-    else if (a.state === 'stagger') { T.tX = -0.45; T.aRx = 0.3; T.aRz = -0.7; T.aLz = 0.7; T.aLx = 0.3; T.lLx = 0.3; T.hipY = -0.08; rate = 24; }
+    else if (a.state === 'stagger') { T.hX = -0.45; T.tZ = 0.15; T.tX = -0.45; T.aRx = 0.3; T.aRz = -0.7; T.aLz = 0.7; T.aLx = 0.3; T.lLx = 0.3; T.hipY = -0.08; rate = 24; }
     else if (a.state === 'shoot') { T.aLx = -1.5 + smooth(0.15, 0.3, a.u) * 0.5 * (1 - smooth(0.3, 0.8, a.u)); T.aLz = -0.1; T.fLx = -0.05; T.tY = -0.35; rate = 28; }
     else if (a.state === 'aim') { T.aRx = -1.45; T.fRx = -0.1; T.wRx = 1.55; T.aLx = -1.2; T.aLz = -0.5; T.fLx = -0.6; T.tY = 0.25; }
     else if (a.state === 'dig') { const s = Math.sin(a.t * 9); T.tX = 0.75 + s * 0.15; T.aRx = -0.9 - s * 0.5; T.aLx = -0.9 - s * 0.5; T.fRx = -0.4; T.fLx = -0.4; T.hipY = -0.2; T.lLx = -0.5; T.lRx = -0.5; T.sLx = 0.9; T.sRx = 0.9; }
     else if (a.state === 'roll') { T.tX = 0.9; T.lLx = -1.6; T.lRx = -1.6; T.sLx = 1.9; T.sRx = 1.9; T.aRx = -0.9; T.aLx = -0.9; T.hipY = -0.3; rate = 30; }
     else if (a.state === 'whirl') { T.aRx = -1.45; T.aRz = -1.25; T.fRx = -0.05; T.wRx = 1.6; T.tX = 0.18; T.hipY = -0.1; T.lLx = -0.4; T.lRx = 0.35; rate = 32; }
     else if (a.state === 'throw') { T.aLx = -2.6 + smooth(0.2, 0.5, a.u) * 2.0; T.aLz = -0.2; T.fLx = -0.4; T.tY = -0.3 + smooth(0.2, 0.5, a.u) * 0.6; rate = 28; }
+    const tOn = c.torch && !!P.flame && !['shoot', 'throw', 'roll', 'dead', 'dig'].includes(a.state);
+    if (tOn) { T.aLx = -0.95 + (T.aLx || 0) * 0.15; T.aLz = 0.28; T.fLx = -0.75; }
     for (const k of KEYS) cur[k] = damp(cur[k], T[k], rate, dt);
-    P.hips.position.y = 0.92 + cur.hipY; P.torso.rotation.set(cur.tX, cur.tY, 0);
+    P.torch.visible = tOn; if (tOn) { P.torch.rotation.x = -(cur.aLx + cur.fLx + cur.tX); P.flame.scale.setScalar(0.85 + Math.random() * 0.35); }
+    P.hips.rotation.z = cur.hipZ; P.head.rotation.set(cur.hX, cur.hY, 0);
+    P.hips.position.y = 0.92 + cur.hipY; P.torso.rotation.set(cur.tX, cur.tY, cur.tZ);
     P.armR.rotation.set(cur.aRx, 0, cur.aRz); P.foreR.rotation.x = cur.fRx; P.weapon.rotation.set(cur.wRx, 0, cur.wRz);
     P.armL.rotation.set(cur.aLx, 0, cur.aLz); P.foreL.rotation.x = cur.fLx; P.gun.rotation.x = 1.5;
     P.legL.rotation.x = cur.lLx; P.legR.rotation.x = cur.lRx; P.shinL.rotation.x = cur.sLx; P.shinR.rotation.x = cur.sRx;
@@ -183,6 +208,8 @@ export function buildCharacter(lookName, opts = {}) {
     else { P.pivot.rotation.x = 0; P.pivot.position.y = 0.92; }
     P.pivot.rotation.y = a.state === 'whirl' ? a.u * Math.PI * 2 : 0;
   };
+  const tv = new THREE.Vector3();
+  c.torchPos = () => (P.tip ? P.tip.getWorldPosition(tv) : null);
   c.setBlade = (color) => { P.weapon.children[0].material = mat(color); P.weapon.children[1].material = mat(color); };
   c.update(0.016);
   return c;

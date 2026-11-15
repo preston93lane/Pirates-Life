@@ -92,6 +92,8 @@ export const FOES = {
   marksman: { name: 'Marksman', hp: 30, dmg: 15, speed: 3.2, tele: 1.25, look: 'marksman', ranged: true, xp: 14, gold: [5, 16] },
   brute: { name: 'Brute', hp: 120, dmg: 24, speed: 2.9, tele: 0.95, look: 'brute', heavy: true, scale: 1.22, xp: 30, gold: [14, 34] },
   captain: { name: 'Captain', hp: 170, dmg: 17, speed: 4.0, tele: 0.5, look: 'captain', scale: 1.08, xp: 50, gold: [40, 90] },
+  rifleman: { name: 'Navy Rifleman', hp: 44, dmg: 17, speed: 3.2, tele: 1.0, look: 'rifleman', ranged: true, xp: 20, gold: [8, 20] },
+  commandant: { name: 'Fort Commandant', hp: 420, dmg: 26, speed: 4.2, tele: 0.45, look: 'commandant', scale: 1.25, mini: true, xp: 220, gold: [200, 320] },
   soldier: { name: 'Marine', hp: 52, dmg: 12, speed: 3.6, tele: 0.55, look: 'soldier', xp: 14, gold: [6, 16] },
   skeleton: { name: 'Cursed Dead', hp: 36, dmg: 12, speed: 3.9, tele: 0.5, look: 'skeleton', xp: 14, gold: [2, 10] },
   crab: { name: 'Giant Crab', hp: 34, dmg: 9, speed: 4.4, tele: 0.45, look: 'crab', xp: 10, gold: [0, 4] },
@@ -267,3 +269,34 @@ export const FEATS = {
 };
 // food, water and limes: what a hand uses, and what a full store is, per head
 export const STORES = { food: { name: 'Salt pork and biscuit', gold: 2, per: 12 }, water: { name: 'Fresh water', gold: 1, per: 12 }, limes: { name: 'Limes', gold: 4, per: 6 } };
+
+// ----- the skill tree: three constellations. Each forks; deeper stars cost more. -----
+// cost: points for each rank in turn. gives: steps of a basic bonus per rank. feat: unlocks a special ability.
+export const TREE_BRANCH = { blade: 'Blade and Pistol', sea: 'The Sea', cap: 'Captaincy' };
+export const TREE = {
+  drill: { b: 'blade', name: 'Cutlass Drill', x: 50, y: 0, cost: [1, 1, 1], gives: { sword: 1 }, desc: '+6% blade damage per rank.' },
+  lunge: { b: 'blade', name: 'Duellist', x: 17, y: 1, req: 'drill', need: 2, cost: [2, 2], gives: { sword: 1 }, desc: '+6% blade damage per rank.' },
+  whirl: { b: 'blade', name: 'Storm of Steel', x: 17, y: 2, req: 'lunge', need: 1, cost: [3], feat: 'whirl', desc: 'WHIRL is ready again in 4 seconds instead of 7.' },
+  exec: { b: 'blade', name: 'Executioner', x: 17, y: 3, req: 'whirl', need: 1, cost: [3, 3, 4], gives: { sword: 2 }, desc: '+12% blade damage per rank.' },
+  steady: { b: 'blade', name: 'Steady Hand', x: 50, y: 1, req: 'drill', need: 1, cost: [1, 2, 2], gives: { marks: 1 }, desc: '+8% pistol damage and 4% faster reload per rank.' },
+  twin: { b: 'blade', name: 'Brace of Pistols', x: 50, y: 2, req: 'steady', need: 2, cost: [3], feat: 'twin', desc: 'A second pistol: every shot hits 70% harder.' },
+  deadeye: { b: 'blade', name: 'Dead Eye', x: 50, y: 3, req: 'twin', need: 1, cost: [3, 4], gives: { marks: 2 }, desc: '+16% pistol damage and 8% faster reload per rank.' },
+  hide: { b: 'blade', name: 'Thick Hide', x: 83, y: 1, req: 'drill', need: 1, cost: [1, 2, 2], gives: { tough: 1 }, desc: '+10 health per rank.' },
+  wind: { b: 'blade', name: 'Second Wind', x: 83, y: 2, req: 'hide', need: 2, cost: [3], feat: 'wind', desc: 'Once every three minutes a killing blow leaves you standing at 40% health.' },
+  iron: { b: 'blade', name: 'Iron Constitution', x: 83, y: 3, req: 'wind', need: 1, cost: [3, 4], gives: { tough: 2 }, desc: '+20 health per rank.' },
+  legs: { b: 'sea', name: 'Sea Legs', x: 50, y: 0, cost: [1, 1], gives: { seaman: 1 }, desc: '+2.5% ship speed and turning per rank.' },
+  guncap: { b: 'sea', name: 'Gun Captain', x: 25, y: 1, req: 'legs', need: 1, cost: [1, 2, 2], gives: { gunnery: 1 }, desc: '+4% cannon damage per rank.' },
+  hot: { b: 'sea', name: 'Hot Shot', x: 25, y: 2, req: 'guncap', need: 2, cost: [3], feat: 'hot', desc: 'Round shot has a 15% chance to set the enemy deck ablaze.' },
+  master: { b: 'sea', name: 'Master Gunner', x: 25, y: 3, req: 'hot', need: 1, cost: [3, 4], gives: { gunnery: 2 }, desc: '+8% cannon damage per rank.' },
+  trim: { b: 'sea', name: 'Trim the Sails', x: 75, y: 1, req: 'legs', need: 1, cost: [1, 2, 2], gives: { seaman: 1 }, desc: '+2.5% ship speed and turning per rank.' },
+  hull: { b: 'sea', name: 'Clean Hull', x: 75, y: 2, req: 'trim', need: 2, cost: [3], feat: 'hull', desc: 'Your ship turns 15% faster.' },
+  storm: { b: 'sea', name: 'Storm Sailor', x: 75, y: 3, req: 'hull', need: 1, cost: [3, 4], gives: { seaman: 2 }, desc: '+5% ship speed and turning per rank.' },
+  voice: { b: 'cap', name: 'Voice of Command', x: 50, y: 0, cost: [1, 1], gives: { lead: 1 }, desc: 'Morale falls 8% slower per rank. Every 2 leadership ranks add a berth.' },
+  firm: { b: 'cap', name: 'Firm Hand', x: 25, y: 1, req: 'voice', need: 1, cost: [1, 2, 2], gives: { lead: 1 }, desc: 'Morale falls 8% slower per rank. Every 2 leadership ranks add a berth.' },
+  born: { b: 'cap', name: 'Born Leader', x: 25, y: 2, req: 'firm', need: 2, cost: [3], feat: 'born', desc: '+2 berths, and a fourth hand may come ashore with you.' },
+  legend: { b: 'cap', name: 'Living Legend', x: 25, y: 3, req: 'born', need: 1, cost: [3, 4], gives: { lead: 2 }, desc: 'Two leadership ranks each: slower morale loss and one more berth.' },
+  eye: { b: 'cap', name: 'Eye for Loot', x: 75, y: 1, req: 'voice', need: 1, cost: [1, 2, 2], gives: { plunder: 1 }, desc: '+4% gold from ships per rank.' },
+  powder: { b: 'cap', name: 'Powder Hand', x: 75, y: 2, req: 'eye', need: 2, cost: [3], feat: 'powder', desc: 'Powder flasks hit 30% harder and you can carry 9.' },
+  ransom: { b: 'cap', name: "King's Ransom", x: 75, y: 3, req: 'powder', need: 1, cost: [3, 4], gives: { plunder: 2 }, desc: '+8% gold from ships per rank.' },
+};
+export const POINTS_PER_RANK = 3;

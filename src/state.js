@@ -1,5 +1,5 @@
 // Player save data, derived stats and the economy. No rendering in here.
-import { SKILLS, FEATS, FEAT_COST, STORES, HANDS, GRADES, HAND_NAMES, HAND_NICK, STATIONS, LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_CAP_HOURS, GOODS, PORT_PRICES, xpFor, RANKS } from './data.js';
+import { TREE, POINTS_PER_RANK, STORES, HANDS, GRADES, HAND_NAMES, HAND_NICK, STATIONS, LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_CAP_HOURS, GOODS, PORT_PRICES, xpFor, RANKS } from './data.js';
 
 const KEY = 'pirates-life-save-v1';
 
@@ -16,9 +16,12 @@ export function crewBonus(s) {
   b.speed = Math.min(0.3, b.speed); b.dmg = Math.min(0.6, b.dmg); b.reload = Math.min(0.3, b.reload); b.keep = Math.min(0.75, b.keep);
   return b;
 }
-export const sk = (s, id) => (s.skills && s.skills[id]) || 0;
-export const feat = (s, id) => !!(s.feats && s.feats[id]);
-export const skillPoints = (s) => (s.level - 1) * 2 - Object.values(s.skills).reduce((a, b) => a + b, 0) - Object.keys(s.feats).length * FEAT_COST;
+const nr = (s, id) => (s.tree && s.tree[id]) || 0;
+export const nodeRank = nr;
+export const sk = (s, id) => { let n = 0; for (const k in TREE) { const g = TREE[k].gives; if (g && g[id]) n += g[id] * nr(s, k); } return n; };
+export const feat = (s, id) => { for (const k in TREE) if (TREE[k].feat === id && nr(s, k) > 0) return true; return false; };
+export const skillPoints = (s) => { let spent = 0; for (const k in TREE) for (let i = 0; i < nr(s, k); i++) spent += TREE[k].cost[i]; return (s.level - 1) * POINTS_PER_RANK - spent; };
+export const nodeOpen = (s, id) => { const n = TREE[id]; return !n.req || nr(s, n.req) >= n.need; };
 export const storesFull = (s) => { const n = s.crew.length + 1, out = {}; for (const k in STORES) out[k] = n * STORES[k].per; return out; };
 export const storesCost = (s) => { const f = storesFull(s); let g = 0; for (const k in STORES) g += Math.max(0, Math.ceil(f[k] - s[k])) * STORES[k].gold; return g; };
 export const hireCost = (o) => Math.round(HANDS[o.role].gold * GRADES[o.g].cost);
@@ -38,7 +41,7 @@ export function newSave() {
     ship: { cls: 'cutter', up: null, hp: 1, sail: 'bone' },
     owned: { cutter: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
-    skills: {}, feats: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
+    tree: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
     crew: null, morale: 70, station: 'even', atWill: false, hire: null,
     bombs: 2, bless: 0, caves: {}, music: true, daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,

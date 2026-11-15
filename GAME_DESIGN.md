@@ -443,3 +443,12 @@ particles and sharpness.
 - **Skills and feats.** 2 points per rank. Seven skills, five steps each, each step a fixed bonus. Three steps in a skill opens its feat (3 points).
 - **Supplies.** Food, water and limes are used while sailing, scaled by crew size. Empty stores cut morale; no limes for a few minutes brings scurvy. Morale at zero is a mutiny: half the hands leave with some gold. One tap at any tavern bar refills.
 - **Costs.** Hull repair scales with ship price and fitted upgrades. Special shot is fitted once (dear), then bought by the keg (cheap); each gun fired uses one.
+
+## 15. Towns, forts, command bar, skill tree (build 0.7)
+
+- **Three different ports.** Saltmere: a village round a cobbled square, with every trade. Port Regal: paved grid, church, governor's house; tavern, market, shipwright, no blacksmith. Black Shoals: boardwalk shanty with a tavern in a wreck; tavern, blacksmith, market, no shipwright. Each shop has its own shape and a painted sign.
+- **Navy forts.** Fort Regal (large) and Gull Battery (small): stone walls, towers, marines, riflemen and a commandant, all 45% stronger than usual. The strongroom pays very well, costs navy standing, and refills after 30 minutes.
+- **Command bar.** EVEN / SAILS / GUNS / MEND buttons on the left of the sailing screen. A change takes 3 to 5 seconds while the hands move.
+- **Skill tree.** Three constellations (Blade and Pistol, The Sea, Captaincy). Each starts at one star and forks. Deeper stars cost more points. 3 points per rank.
+- **Characters.** Faces, rounded joints, breathing and weight-shift when idle, hip roll and counter-twist when running. Torch is carried in the off hand. Hold SHOOT to aim the pistol, release to fire.
+- **Fixes.** Released ships cannot be robbed twice. Boulder collision matches the rock. Fewer ships at sea. Nothing is planted inside a boulder or wall.

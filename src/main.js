@@ -37,6 +37,8 @@ window.__game = game; // handy for debugging and automated tests
 game.toast = (m, t) => game.ui.toast(m, t);
 game.shake = (v) => { game.cam.shake = Math.min(1.6, game.cam.shake + v); };
 game.hitStop = (s) => { game.stop = Math.max(game.stop, s); };
+// A change of stations takes a few seconds while the hands run to their places.
+game.orderStation = (k) => { const s = game.save, sea = game.sea; if ((sea.stn ? sea.stn.k : s.station) === k) return; if (k === s.station) { sea.stn = null; return; } sea.stn = { k, t: 3 + Math.random() * 2 }; audio.ui(); game.toast({ even: '"All hands to your own stations!"', sails: '"All hands aloft! Make sail!"', guns: '"Run out the guns! Gun crews, move!"', repair: '"Damage parties below! Move!"' }[k], 'dim'); };
 game.emit = (evt, d) => game.quests.on(evt, d || {});
 game.cheer = (d) => { const s = game.save, before = s.morale; addMorale(s, d); game.sea.refreshStats(); if (before >= 25 && s.morale < 25) game.toast('The crew are muttering. Share out some gold or rum (Menu, Command) before hands start to desert.', 'warn'); };
 game.reward = (r, label) => {
@@ -226,6 +228,7 @@ function frame(now) {
     if (input.take('ctx') && game.ctx) { audio.ui(); game.ctx.run(); }
     if (input.take('menu')) game.ui.openMenu();
     if (input.take('cmd')) game.ui.openMenu('Command');
+    for (const k of ['even', 'sails', 'guns', 'repair']) if (input.take('stn_' + k)) game.orderStation(k);
     game.fx.dim = game.world.cave ? 0.4 : 1 - 0.45 * game.world.night;
     if (game.mode === 'sea') { input.pressed.skill = input.pressed.bomb = false; }
     if (game.mode !== 'sea') { input.pressed.sailUp = input.pressed.sailDown = input.pressed.ammo = input.pressed.swivel = false; }

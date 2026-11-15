@@ -5,7 +5,7 @@ import { clamp, dist2 } from './util.js';
 
 const KIND = { town: 'Port town', hideout: 'Your hideout', fort: 'Pirate fort', ruins: 'Ruins', crab: 'Beast lair', islet: 'Islet' };
 const LEGEND = [
-  ['you', 'Your ship'], ['town', 'Port town: tavern, shipwright, smith, market'], ['hideout', 'Your hideout'], ['fort', 'Pirate fort (raid)'], ['ruins', 'Ruins and the cursed dead'],
+  ['you', 'Your ship'], ['town', 'Port town (tap one to see its shops)'], ['hideout', 'Your hideout'], ['fort', 'Pirate fort (raid)'], ['ruins', 'Ruins and the cursed dead'],
   ['crab', 'Beast lair'], ['islet', 'Islet'], ['treasure', 'Buried treasure (a map you hold)'], ['quest', 'Current objective'], ['course', 'Course you set'],
   ['merchant', 'Merchant ship'], ['navy', 'Navy ship'], ['hostile', 'Hostile ship'], ['storm', 'Storm (it moves)'], ['zone', 'Dangerous waters'], ['fog', 'Uncharted: sail there to reveal'],
 ];
@@ -97,8 +97,9 @@ export function createMap(game, $) {
       title = isl.name; sub = `${KIND[isl.kind]} · ${where}`; body = `<p>${isl.blurb}</p>`;
       if (isl.kind === 'town') {
         const pr = PORT_PRICES[isl.id], names = (test) => Object.keys(pr).filter((g) => test(pr[g])).map((g) => GOODS[g].name).join(', ') || 'nothing special';
-        body += `<p><b>Here:</b> tavern (jobs, rum, ransoms), shipwright, blacksmith, market.</p><p><b>Cheap to buy:</b> ${names((v) => v <= 0.85)}<br><b>Sells dear:</b> ${names((v) => v >= 1.25)}</p>`;
+        body += `<p><b>Here:</b> ${isl.npcs.map((n) => ({ tavern: 'tavern (jobs, hands, games, stores)', shipwright: 'shipwright (repairs, ships, shot)', smith: 'blacksmith (blades, pistols, flasks)', market: 'market' }[n.kind])).join(', ')}.${isl.npcs.some((n) => n.kind === 'shipwright') ? '' : ' <i>No shipwright: repair elsewhere.</i>'}</p><p><b>Cheap to buy:</b> ${names((v) => v <= 0.85)}<br><b>Sells dear:</b> ${names((v) => v >= 1.25)}</p>`;
       }
+      if (isl.navy) body += `<p><b>${isl.navy.name}:</b> a navy fort with a strongroom. Raiding it pays very well and is very dangerous.</p>`;
       if (f) body += `<p><b>${FACTIONS[f].name}:</b> ${standing(s.rep[f])} (${s.rep[f]})</p>`;
       const n = s.maps.filter((mp) => mp.island === isl.id).length; if (n) body += `<p>You hold ${n} treasure map${n > 1 ? 's' : ''} for this island.</p>`;
       course = { x: isl.anchor.x, z: isl.anchor.z, name: isl.name };
