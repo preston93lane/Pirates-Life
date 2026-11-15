@@ -1,0 +1,65 @@
+<div id="game">
+  <canvas id="c"></canvas>
+  <div id="touch"></div>
+  <div id="stick"><div id="knob"></div></div>
+
+  <div id="hud" hidden>
+    <div class="tl">
+      <div id="vitals">
+        <div class="bar"><i id="hpFill"></i><span id="hpText"></span></div>
+        <div id="purse"><span class="g" id="pGold"></span><span id="pTimber"></span><span id="pIron"></span><span id="pHold"></span></div>
+        <div id="wanted" hidden>WANTED</div>
+      </div>
+      <div id="quest"><b id="qTitle"></b><span id="qText"></span></div>
+    </div>
+    <div class="tc">
+      <div id="target" hidden><b id="tName"></b><div class="bar foe"><i id="tFill"></i></div></div>
+      <div id="toasts"></div>
+    </div>
+    <div class="tr">
+      <canvas id="mini" width="232" height="232"></canvas>
+      <div id="place"></div>
+      <div class="menuBtns">
+        <button id="btnMenu" type="button" aria-label="Captain's log"></button>
+        <button id="btnMute" type="button" aria-label="Sound"></button>
+      </div>
+    </div>
+
+    <div id="seaBtns" class="btns" hidden>
+      <div id="reloads"><span id="rlP"><i></i>PORT</span><span id="rlS"><i></i>STBD</span></div>
+      <button class="act big" data-act="primary" id="bFire" type="button"><span class="ic" data-icon="fire"></span><em>FIRE</em></button>
+      <button class="act" data-act="sailUp" id="bUp" type="button"><span class="ic" data-icon="up"></span><em>SAIL</em></button>
+      <button class="act" data-act="sailDown" id="bDown" type="button"><span class="ic" data-icon="down"></span><em>REEF</em></button>
+      <div id="sailPips"><i></i><i></i></div>
+      <div id="speed"></div>
+    </div>
+    <div id="landBtns" class="btns" hidden>
+      <button class="act big" data-act="primary" id="bAtk" type="button"><span class="ic" data-icon="sword"></span><em>STRIKE</em></button>
+      <button class="act" data-act="block" id="bBlock" type="button"><span class="ic" data-icon="shield"></span><em>BLOCK</em></button>
+      <button class="act" data-act="dodge" id="bDodge" type="button"><span class="ic" data-icon="dodge"></span><em>DODGE</em></button>
+      <button class="act" data-act="shoot" id="bShoot" type="button"><span class="ic" data-icon="gun"></span><em>SHOOT</em></button>
+      <button class="act small" data-act="rum" id="bRum" type="button"><span class="ic" data-icon="rum"></span><em id="rumN">0</em></button>
+    </div>
+    <button id="ctx" data-act="ctx" type="button" hidden><span class="ic"></span><span><b></b><small></small></span></button>
+    <div id="hint" hidden></div>
+    <div id="floats"></div>
+  </div>
+
+  <div id="flash"></div>
+  <div id="banner" hidden><small></small><b></b><p></p></div>
+  <div id="panel" hidden><div class="sheet"><header><h2></h2><button type="button" id="panelClose" aria-label="Close">Close</button></header><nav></nav><div class="body"></div></div></div>
+
+  <div id="title">
+    <div class="titleBox">
+      <p class="over">An open-sea adventure</p>
+      <h1>Pirate&rsquo;s Life</h1>
+      <p class="tag">Sail. Board. Plunder. Build. Defend what you stole.</p>
+      <div class="titleBtns">
+        <button type="button" id="btnContinue" hidden>Continue voyage</button>
+        <button type="button" id="btnNew">New voyage</button>
+      </div>
+      <p class="fine" id="titleFine">Best in landscape. Left thumb steers and moves; drag the screen to look around.</p>
+    </div>
+  </div>
+  <div id="fade"></div>
+</div>

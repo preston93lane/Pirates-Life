@@ -1,0 +1,17 @@
+{
+  "name": "pirates-life",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-sea pirate adventure for phones (WebGL).",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs --serve"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  }
+}
