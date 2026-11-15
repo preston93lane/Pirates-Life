@@ -1,6 +1,7 @@
 // Everything afloat: the player's ship, AI ships, cannon fire, salvage, the Kraken.
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES } from './data.js';
 import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale, feat, storesFull } from './state.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
@@ -298,21 +299,69 @@ export function createSea(game) {
 
 
   // ---------- Poseidon: the sea god rises in his own waters ----------
-  const godMat = new THREE.MeshLambertMaterial({ color: 0x2f7a7c, flatShading: true }), godGold = new THREE.MeshLambertMaterial({ color: 0xd9b24a, emissive: 0x6a5210, flatShading: true }), godBeard = new THREE.MeshLambertMaterial({ color: 0xd4ece6, flatShading: true });
+  const godSkin = new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true, specular: 0x6f8a8c, shininess: 28 }), godDark = new THREE.MeshPhongMaterial({ color: 0x0c1a1c, specular: 0x223333, shininess: 20 });
+  const godMetal = new THREE.MeshPhongMaterial({ color: 0x8a6a22, specular: 0xffe9a0, shininess: 90, emissive: 0x2a1c04 }), godHair = new THREE.MeshPhongMaterial({ color: 0xffffff, vertexColors: true, specular: 0xbfd0cc, shininess: 18 });
+  const godKelp = new THREE.MeshPhongMaterial({ color: 0x1c3a26, specular: 0x4a7a5a, shininess: 40, side: THREE.DoubleSide }), godEye = new THREE.MeshBasicMaterial({ color: 0xd6fbff, fog: false }), godGlow = new THREE.MeshBasicMaterial({ color: 0x6fe6ff, fog: false, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false });
   const markRing = new THREE.Mesh(new THREE.RingGeometry(12, 15, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff4a2a, transparent: true, opacity: 0.8, depthTest: false, fog: false })); markRing.visible = false; scene.add(markRing);
   function spawnGod() {
-    const z = ZONES.trident, g = new THREE.Group(), lv = 1 + 0.05 * (game.save.level - 1);
-    const add = (geo, mat, x, y, zz, rx = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, zz); m.rotation.set(rx, 0, rz); g.add(m); return m; };
-    add(new THREE.CylinderGeometry(6.5, 5, 18, 8), godMat, 0, 7, 0); add(new THREE.CylinderGeometry(9, 6.5, 5, 8), godMat, 0, 17, 0);
-    add(new THREE.IcosahedronGeometry(3.7, 1), godMat, 0, 23.2, 0); add(new THREE.ConeGeometry(3.1, 8, 6), godBeard, 0, 19, 2.6, Math.PI);
-    add(new THREE.SphereGeometry(0.5, 6, 4), godGold, -1.3, 24, 3.3); add(new THREE.SphereGeometry(0.5, 6, 4), godGold, 1.3, 24, 3.3);
-    for (let i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.6, 3.2, 4), godGold, Math.sin(i * 1.047) * 2.7, 27.4, Math.cos(i * 1.047) * 2.7);
-    add(new THREE.CylinderGeometry(1.9, 1.5, 14, 6), godMat, -10, 11, 1, 0, -0.25); add(new THREE.CylinderGeometry(1.9, 1.5, 12, 6), godMat, 11.5, 19, 1, 0, -0.95);
-    add(new THREE.CylinderGeometry(0.4, 0.4, 34, 5), godGold, 16, 20, 3); add(new THREE.BoxGeometry(5, 0.7, 0.7), godGold, 16, 35, 3);
-    for (const dx of [-2.2, 0, 2.2]) add(new THREE.ConeGeometry(0.6, dx ? 4 : 6, 4), godGold, 16 + dx, dx ? 37.3 : 38.3, 3);
+    const z = ZONES.trident, g = new THREE.Group(), lv = 1 + 0.05 * (game.save.level - 1), V = (x, y, zz) => new THREE.Vector3(x, y, zz), UP = V(0, 1, 0);
+    const parts = { skin: [], dark: [], metal: [], hair: [], kelp: [] }, armParts = { skin: [], metal: [] };
+    const put = (bag, geo, x, y, zz, sx = 1, sy = sx, sz = sx, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Matrix4().compose(V(x, y, zz), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(sx, sy, sz)); bag.push(geo.applyMatrix4(m)); };
+    const limb = (bag, a, b, r0, r1) => { const d = b.clone().sub(a), len = d.length(), geo = new THREE.CylinderGeometry(r1, r0, len, 12, 4); geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, d.normalize())); geo.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); bag.push(geo); bag.push(new THREE.SphereGeometry(r0 * 1.04, 12, 8).translate(a.x, a.y, a.z)); bag.push(new THREE.SphereGeometry(r1 * 1.04, 12, 8).translate(b.x, b.y, b.z)); };
+    // a tapering, waving lock of hair, beard or kelp hanging from a point
+    const lock = (bag, x, y, zz, len, r, ph, out, flat = 1) => { const geo = new THREE.ConeGeometry(r, len, 7, 10).rotateX(Math.PI), pos = geo.attributes.position; for (let k = 0; k < pos.count; k++) { const t = 0.5 - pos.getY(k) / len; pos.setX(k, pos.getX(k) + Math.sin(t * 5 + ph) * r * 1.1 * t + out[0] * t * t * len); pos.setZ(k, pos.getZ(k) * flat + Math.cos(t * 4 + ph * 1.7) * r * 0.9 * t + out[1] * t * t * len); } geo.translate(x, y - len / 2, zz); geo.computeVertexNormals(); bag.push(geo); };
+    // torso: a broad, muscled trunk rising out of the sea
+    const prof = [[5.6, -14], [5.5, -4], [5.0, 2], [4.6, 5], [5.3, 8], [6.6, 11], [7.5, 14], [7.6, 16], [6.6, 17.8], [4.2, 19], [2.7, 20], [2.4, 21.5]].map(([r, y]) => new THREE.Vector2(r, y));
+    put(parts.skin, new THREE.LatheGeometry(prof, 20), 0, 0, 0, 1.22, 1, 0.82);
+    for (const sx of [-1, 1]) {
+      put(parts.skin, new THREE.SphereGeometry(3.7, 14, 10), sx * 3.4, 14.0, 3.6, 1.08, 0.78, 0.45, 0, 0, sx * 0.12); // chest
+      put(parts.skin, new THREE.SphereGeometry(3.4, 14, 10), sx * 9.0, 16.6, 0, 1.05, 1, 1);             // shoulder
+      put(parts.skin, new THREE.SphereGeometry(2.6, 12, 8), sx * 5.4, 18.6, -0.6, 1.5, 0.7, 1);          // trapezius
+      for (let r = 0; r < 3; r++) put(parts.skin, new THREE.SphereGeometry(1.5, 10, 8), sx * 1.55, 9.8 - r * 2.5, 3.95 - r * 0.2, 1, 0.72, 0.22); // belly, barely raised
+      if (sx < 0) put(parts.metal, new THREE.TorusGeometry(2.0, 0.4, 6, 14), sx * 11.2, 5.2, 2.6 + (sx < 0 ? 0.6 : 0), 1, 1, 2.6, Math.PI / 2 - 0.5, 0, sx * 0.15); // bracer
+      for (let r = 0; r < 5; r++) put(parts.dark, new THREE.DodecahedronGeometry(0.5 + (r % 3) * 0.28, 0), sx * (8.2 + (r % 3) * 1.1), 18.6 + (r % 2) * 0.7, -1 + r * 0.7, 1, 1, 1, r, r * 2, 0); // barnacles
+    }
+    // left arm hangs to the water
+    limb(parts.skin, V(-9.3, 16.2, 0), V(-11.8, 8, 1.5), 2.7, 2.1); limb(parts.skin, V(-11.8, 8, 1.5), V(-10.4, 0.5, 5.5), 2.1, 1.6); put(parts.skin, new THREE.SphereGeometry(2.1, 10, 8), -10.2, -0.6, 6.2, 1, 0.8, 1.2);
+    // head: heavy brow, sunken eyes, a hard mouth
+    const mark0 = {}; for (const k in parts) mark0[k] = parts[k].length;
+    put(parts.skin, new THREE.SphereGeometry(3.3, 18, 14), 0, 24.6, 0.4, 0.9, 1.12, 1);
+    put(parts.skin, new THREE.SphereGeometry(2.4, 12, 10), 0, 22.6, 1.5, 0.95, 0.9, 0.9);                 // jaw
+    put(parts.skin, new THREE.SphereGeometry(2.2, 12, 8), 0, 25.75, 2.7, 1.25, 0.3, 0.55, -0.25);         // brow ridge
+    put(parts.skin, new THREE.ConeGeometry(0.62, 2.3, 8), 0, 24.6, 3.75, 1, 1, 1.3, 0.35);                // nose
+    for (const sx of [-1, 1]) { put(parts.skin, new THREE.SphereGeometry(1.0, 10, 8), sx * 1.9, 24.0, 2.6, 1, 0.7, 0.7); put(parts.dark, new THREE.SphereGeometry(0.78, 10, 8), sx * 1.2, 25.05, 3.05, 1.15, 0.7, 0.5); }
+    put(parts.dark, new THREE.SphereGeometry(1.0, 10, 8), 0, 22.8, 3.2, 1.35, 0.42, 0.6);                 // mouth, open in a snarl
+    for (let k = 0; k < 6; k++) put(parts.hair, new THREE.ConeGeometry(0.13, 0.5, 4), (k - 2.5) * 0.36, 23.0, 3.72, 1, 1, 1, Math.PI);
+    // beard, moustache and long wet hair
+    for (let k = 0; k < 17; k++) { const t = (k / 16) * 2.5 - 1.25, r = 2.5; lock(parts.hair, Math.sin(t) * r, 22.9 - Math.abs(t) * 0.5 + (k % 2) * 0.3, 1.3 + Math.cos(t) * r * 0.85, 7 + (k % 3) * 1.6 + (1 - Math.abs(t)) * 3, 1.05, k * 1.3, [Math.sin(t) * 0.07, 0.06]); }
+    for (let k = 0; k < 9; k++) { const t = (k / 8) * 1.6 - 0.8; lock(parts.hair, Math.sin(t) * 1.9, 22.2, 2.9 + Math.cos(t) * 0.9, 9 + (k % 2) * 2, 0.7, k * 2.1, [Math.sin(t) * 0.04, 0.08]); }
+    for (const sx of [-1, 1]) lock(parts.hair, sx * 0.7, 23.5, 3.5, 4.2, 0.5, sx, [sx * 0.12, 0.04]);
+    for (let k = 0; k < 22; k++) { const t = (k / 21) * 3.5 + 1.39; lock(parts.hair, Math.sin(t) * 3.0, 27 - (k % 3) * 0.4, 0.2 + Math.cos(t) * 3.0, 13 + (k % 4) * 2.5, 1.15, k * 0.9, [Math.sin(t) * 0.16, Math.cos(t) * 0.14 - 0.05]); }
+    // crown of black coral and gold
+    put(parts.metal, new THREE.TorusGeometry(3.0, 0.42, 8, 24), 0, 27.3, 0.3, 1, 1, 1, Math.PI / 2);
+    for (let k = 0; k < 11; k++) { const t = (k / 11) * TAU, h = 2.6 + (k % 3) * 1.5 + (k === 0 ? 1.6 : 0); put(k % 2 ? parts.dark : parts.metal, new THREE.ConeGeometry(0.42, h, 6), Math.sin(t) * 3.05, 27.5 + h / 2, 0.3 + Math.cos(t) * 3.05, 1, 1, 1, Math.cos(t) * 0.28, 0, -Math.sin(t) * 0.28); }
+    { const m = new THREE.Matrix4().makeTranslation(0, 21.2, 0).multiply(new THREE.Matrix4().makeScale(1.34, 1.34, 1.34)).multiply(new THREE.Matrix4().makeTranslation(0, -21.2, 0)); for (const k in parts) for (let q = mark0[k]; q < parts[k].length; q++) parts[k][q].applyMatrix4(m); }
+    // kelp and weed dragged up from the deep
+    for (let k = 0; k < 12; k++) { const sx = k % 2 ? 1 : -1, x = sx * (5 + (k % 5) * 1.3); lock(parts.kelp, x, 18.4 - (k % 4) * 0.5, (k % 3) * 1.6 - 1.2, 9 + (k % 4) * 2.5, 1.1, k * 1.9, [sx * 0.03, k % 3 ? 0.04 : -0.04], 0.18); }
+    // right arm, raised, and the trident (kept separate so he can drive it down)
+    limb(armParts.skin, V(0.3, -0.4, 0), V(5, 2.6, 2.6), 2.7, 2.2); limb(armParts.skin, V(5, 2.6, 2.6), V(6.2, 9.6, 4.4), 2.2, 1.7); put(armParts.skin, new THREE.SphereGeometry(2.2, 10, 8), 6.3, 10.4, 4.7, 1, 1, 1);
+    put(armParts.metal, new THREE.CylinderGeometry(0.42, 0.5, 36, 10), 6.3, 6, 5.2);
+    put(armParts.metal, new THREE.TorusGeometry(3.1, 0.45, 8, 20, Math.PI), 6.3, 23.6, 5.2, 1, 1, 1, 0, 0, Math.PI);
+    for (const dx of [-3.1, 0, 3.1]) { const h = dx ? 7 : 10; put(armParts.metal, new THREE.ConeGeometry(0.62, h, 8), 6.3 + dx, (dx ? 23.6 : 22) + h / 2, 5.2); put(armParts.metal, new THREE.ConeGeometry(0.5, 2.2, 6), 6.3 + dx + (dx ? Math.sign(dx) * 0.5 : 0.5), (dx ? 27.6 : 28.4), 5.2, 1, 1, 1, 0, 0, dx >= 0 ? 2.5 : -2.5); }
+    put(armParts.metal, new THREE.TorusGeometry(1.9, 0.4, 6, 14), 5.9, 6.4, 3.9, 1, 1, 2.4, Math.PI / 2 - 0.25, 0, -0.15);
+    const mats = { skin: godSkin, dark: godDark, metal: godMetal, hair: godHair, kelp: godKelp };
+    // paint the flesh: dark and weedy where it leaves the water, paler and scarred higher up
+    const paint = (geo, kind, oy = 0) => { const pos = geo.attributes.position, col = new Float32Array(pos.count * 3); for (let q = 0; q < pos.count; q++) { const x = pos.getX(q), y = pos.getY(q) + oy, zz = pos.getZ(q), n = Math.sin(x * 2.3 + y * 1.7) * Math.cos(zz * 2.9 - y * 1.3) * 0.5 + Math.sin(x * 7.1 + zz * 6.3 + y * 5.7) * 0.25;
+      if (kind === 'skin') { const up = smooth(-3, 17, y), wet = 1 - smooth(-2, 6, y), sh = (0.42 + 0.58 * up) * (0.86 + 0.2 * n); col[q * 3] = (0.15 - 0.07 * wet) * sh; col[q * 3 + 1] = (0.27 - 0.06 * wet) * sh; col[q * 3 + 2] = (0.28 - 0.1 * wet) * sh; }
+      else { const sh = 0.55 + 0.45 * smooth(8, 27, y) + n * 0.22; col[q * 3] = 0.62 * sh; col[q * 3 + 1] = 0.72 * sh; col[q * 3 + 2] = 0.70 * sh; } }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); return geo; };
+    const fuse = (list, k, oy) => { const geo = mergeGeometries(list.map((x) => x.toNonIndexed())); return k === 'skin' || k === 'hair' ? paint(geo, k, oy) : geo; };
+    for (const k in parts) g.add(new THREE.Mesh(fuse(parts[k], k, 0), mats[k]));
+    const arm = new THREE.Group(); arm.position.set(9.3, 16.4, 0); for (const k in armParts) arm.add(new THREE.Mesh(fuse(armParts[k], k, 16.4), mats[k])); g.add(arm);
+    const eyes = [-1, 1].map((sx) => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), godEye); e.position.set(sx * 1.61, 26.3, 4.42); e.add(new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8), godGlow)); g.add(e); return e; });
     g.scale.setScalar(1.8); g.position.set(z.x, -72, z.z); scene.add(g);
-    sea.god = { type: 'god', group: g, x: z.x, z: z.z, hp: Math.round(1500 * lv), maxHp: Math.round(1500 * lv), lv, alive: true, name: 'Poseidon', speed: 0, rise: 0, cd: 6, mark: null, n: 0, sink: 0 };
-    audio.roar(); audio.thunder(); game.shake(1.2); game.toast('The sea stands up. POSEIDON rises! Keep moving: stay out of the red rings.', 'warn');
+    sea.god = { type: 'god', group: g, x: z.x, z: z.z, hp: Math.round(1500 * lv), maxHp: Math.round(1500 * lv), lv, alive: true, name: 'Poseidon', speed: 0, rise: 0, cd: 6, mark: null, n: 0, sink: 0, arm, eyes, bolt: 2, foam: 0, thrust: 0 };
+    audio.roar(); audio.thunder(); game.shake(1.2); game.ui.bolt(); game.toast('The sky goes black. The sea stands up. POSEIDON rises! Keep moving: stay out of the red rings.', 'warn');
   }
   function endGod() { const gd = sea.god; if (!gd) return; scene.remove(gd.group); markRing.visible = false; if (sea.target === gd) sea.target = null; sea.god = null; if (!sea.event) game.world.setWeather(0); }
   sea.endGod = endGod;
@@ -329,15 +378,21 @@ export function createSea(game) {
     if (!gd.alive) { gd.sink += dt * 7; if (gd.sink > 44) { endGod(); return; } }
     gd.group.position.y = (-40 + 40 * smooth(0, 1, gd.rise) + Math.sin(game.time * 0.8) * 0.7 - gd.sink) * 1.8;
     gd.group.rotation.y += angleDiff(gd.group.rotation.y, Math.atan2(p.x - gd.x, p.z - gd.z)) * Math.min(1, 1.5 * dt);
+    // he breathes, his eyes burn, the sea boils round him, and the storm he brings does not let up
+    const pulse = gd.mark ? 1.5 + 0.5 * Math.sin(game.time * 20) : 1 + 0.12 * Math.sin(game.time * 3); for (const e of gd.eyes) e.scale.setScalar(pulse);
+    gd.thrust = Math.max(0, gd.thrust - dt * 1.6); gd.arm.rotation.x = Math.sin(game.time * 0.7) * 0.04 + (gd.mark ? -0.22 : 0) + Math.sin(Math.min(1, gd.thrust) * Math.PI) * 0.75;
+    gd.foam -= dt; if (gd.foam <= 0 && gd.rise > 0.15) { gd.foam = 0.22; const t = rand(TAU), r = rand(9, 15); fx.splash(gd.x + Math.sin(t) * r, gd.z + Math.cos(t) * r, gd.rise < 1 ? 2.6 : 1.3); }
     if (!gd.alive) return;
-    if (!sea.event) game.world.setWeather(0.55 * gd.rise);
+    if (!sea.event) game.world.setWeather(0.95 * gd.rise);
+    { const c = game.camera.position, k = gd.rise; for (let i = 0; i < Math.round(k * 18); i++) fx.emit(c.x + rand(-45, 45), c.y + rand(4, 26), c.z + rand(-45, 45), { color: 0xcfd8dc, speed: 0, dir: [12, -50, 4], life: 0.55, size: 0.3, alpha: 0.6, spread: 0 });
+      gd.bolt -= dt; if (gd.bolt <= 0) { gd.bolt = rand(2.5, 6); if (active) { game.ui.bolt(); audio.thunder(); game.shake(0.25); } } }
     if (dist2(p.x, p.z, z.x, z.z) > z.r + 330) { endGod(); if (active) game.toast('The sea god sinks back to his throne.', 'dim'); return; }
     if (!active || !p.alive || gd.rise < 1) return;
     gd.cd -= dt;
     if (gd.mark) {
       const m = gd.mark; m.t -= dt; markRing.visible = true; markRing.position.set(m.x, waveHeight(m.x, m.z, game.time) + 0.5, m.z); markRing.material.opacity = 0.45 + 0.4 * Math.sin(game.time * 14);
       if (m.t <= 0) {
-        game.ui.bolt(); audio.thunder(); fx.splash(m.x, m.z, 4); game.shake(0.6); gd.mark = null; markRing.visible = false;
+        game.ui.bolt(); audio.thunder(); fx.splash(m.x, m.z, 4); game.shake(0.6); gd.mark = null; markRing.visible = false; gd.thrust = 1;
         if (dist2(p.x, p.z, m.x, m.z) < 16) { sea.damage(p, 36 * gd.lv, null, p.x, 3, p.z); game.toast("The trident's lightning strikes your deck!", 'warn'); }
       }
     } else if (gd.cd <= 0) {
