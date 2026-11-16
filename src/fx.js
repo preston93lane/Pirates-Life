@@ -47,7 +47,7 @@ export function createFx(scene, fogColor) {
     sparks(x, y, z, n = 8, color = 0xffe2a0) { fx.emit(x, y, z, { n, color, lit: true, speed: 5, up: 1.5, gravity: 12, life: 0.3, size: 0.28, spread: 0.1 }); },
     blood(x, y, z, n = 7, color = 0x6b1512) { fx.emit(x, y, z, { n, color, speed: 3, up: 1.5, gravity: 12, life: 0.5, size: 0.32, spread: 0.2 }); },
     dust(x, y, z, n = 5, color = 0xb8aa88) { fx.emit(x, y, z, { n, color, speed: 1.4, up: 0.6, life: 0.8, size: 0.9, grow: 1.4, alpha: 0.5, drag: 2, spread: 0.5 }); },
-    wake(x, z, s = 1) { fx.emit(x, 0.1, z, { n: 1, color: 0xe9efea, speed: 0.6, cone: 0.2, life: 2.2, size: 1.6 * s, grow: 1.6, alpha: 0.5, spread: 1.4 * s }); },
+    wake(x, z, s = 1, y = 0.1) { fx.emit(x, y, z, { n: 1, color: 0xe9efea, speed: 0.6, cone: 0.2, life: 2.2, size: 1.6 * s, grow: 1.6, alpha: 0.5, spread: 1.4 * s }); },
     update(dt) {
       for (let k = 0; k < MAX; k++) {
         if (life[k] <= 0) continue;

@@ -650,8 +650,9 @@ export function createSea(game) {
     // wakes
     const cam = game.camera.position;
     for (const s of [p, ...sea.ships]) if (s.alive && s.speed > 2.5 && dist2(s.x, s.z, cam.x, cam.z) < 380 && Math.random() < s.speed * dt * 1.6) {
-      const [wx, wz] = s.at(rand(-1, 1) * s.cls.beam * 0.22, -s.cls.len * 0.56 - 1.2); fx.wake(wx, wz, s.cls.beam / 8);
-      if (Math.random() < 0.5) { const [bx, bz] = s.at(rand(-1, 1) * 1.2, s.cls.len * 0.46); fx.emit(bx, 0.6, bz, { n: 1, color: 0xf2f6f2, speed: 2.5, up: 2, gravity: 9, life: 0.7, size: 0.9, grow: 1, alpha: 0.7, spread: 1 }); }
+      // the wake starts on the water well astern; the bow spray starts on the water just ahead of the stem, never inside the hull
+      const [wx, wz] = s.at(rand(-1, 1) * s.cls.beam * 0.22, -s.cls.len * 0.62 - 3); fx.wake(wx, wz, s.cls.beam / 8, waveHeight(wx, wz, game.time) + 0.25);
+      if (Math.random() < 0.5) { const [bx, bz] = s.at(rand(-1, 1) * 1.2, s.cls.len * 0.5 + 2.6); fx.emit(bx, waveHeight(bx, bz, game.time) + 0.5, bz, { n: 1, color: 0xf2f6f2, speed: 2.5, up: 2, gravity: 9, life: 0.7, size: 0.9, grow: 1, alpha: 0.7, spread: 1 }); }
     }
     for (const s of sea.ships) if (s.alive && s.hp < s.maxHp * 0.42 && Math.random() < dt * 6) fx.fire(s.x + rand(-2, 2), s.model.deckY + 1.5, s.z + rand(-2, 2), 2);
     if (p.alive && p.hp < p.maxHp * 0.3 && Math.random() < dt * 5) fx.fire(p.x + rand(-2, 2), p.model.deckY + 1.5, p.z + rand(-2, 2), 2);
