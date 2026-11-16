@@ -74,7 +74,7 @@ export function createQuests(game) {
     // bounty collected?
     if (evt === 'sink' && s.bounty && d.type === s.bounty.id) {
       const b = BOUNTIES.find((x) => x.id === s.bounty.id), times = s.bountyDone[b.id] || 0;
-      s.bountyDone[b.id] = times + 1; s.bounty = null; if (b.level >= 4) { const c = giveChart(s); if (c) game.toast(`${b.captain} carried a star chart: ${CHARTS[c].name}.`, 'gold'); } s.stats.bounties = (s.stats.bounties || 0) + 1;
+      s.bountyDone[b.id] = times + 1; s.bounty = null; if (b.level >= 4 && Math.random() < 0.5) { const c = giveChart(s); if (c) game.toast(`${b.captain} carried a star chart: ${CHARTS[c].name}.`, 'gold'); } s.stats.bounties = (s.stats.bounties || 0) + 1;
       game.reward({ gold: Math.round(b.gold * (1 + 0.25 * times)), xp: Math.round(b.gold * 0.3) }, `Bounty collected: ${b.captain}`); game.ui.banner('Bounty collected', b.captain, 'The poster comes down. A harder name will take its place.');
       q.on('bounty', {});
     }

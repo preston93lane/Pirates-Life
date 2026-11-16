@@ -81,7 +81,7 @@ export function createWorkers(game) {
         cargo.position.set(0, 1.25, 0.45); cargo.visible = false; ch.root.add(cargo);
         here.group.add(ch.root);
         const home = { x: pl.x + Math.sin(pl.face) * 4, z: pl.z + Math.cos(pl.face) * 4 };
-        crew.push({ pl, ch, cargo, home, x: home.x, z: home.z, tx: home.x, tz: home.z, phase: 'home', wait: rand(1, 5), speed: 1.6 + rand(0.8), face: 0 });
+        crew.push({ pl, ch, cargo, home, x: home.x, z: home.z, tx: home.x, tz: home.z, phase: 'home', wait: rand(1, 5), speed: 1.6 + rand(0.8), face: 0, phase0: rand(1) });
       }
     }
   }
@@ -102,6 +102,7 @@ export function createWorkers(game) {
         w.face = Math.atan2(dx, dz); w.ch.anim.state = 'run'; w.ch.anim.speed = w.speed;
       } else {
         w.ch.anim.state = 'idle'; w.wait -= dt;
+        if (w.phase === 'out' && d <= 0.5) { w.ch.anim.state = 'attack'; w.ch.anim.i = 0; w.ch.anim.u = (game.time * 0.9 + w.phase0) % 1; } // chopping or digging
         if (w.wait <= 0) {
           if (w.phase === 'home' && w.pl.id !== 'vault' && w.pl.id !== 'battery') { w.phase = 'out'; w.tx = site(w).x; w.tz = site(w).z; w.wait = 0; }
           else if (w.phase === 'out') { w.phase = 'back'; w.wait = 1.5 + rand(1); w.cargo.visible = true; }

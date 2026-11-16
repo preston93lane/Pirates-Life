@@ -14,6 +14,7 @@ import { audio } from './audio.js';
 import { newSave, loadSave, writeSave, grant, deathTax, lookSpec, shipStats, pending, addMorale, playerStats } from './state.js';
 import { setPlayerLook, staticFigure } from './character.js';
 import { ISLANDS, ISLAND, RANKS, FLAGS, RANSOM, FOG_N, WORLD_R } from './data.js';
+import { coverView } from './world.js';
 import { clamp, damp, rand, waveHeight, dist2 } from './util.js';
 
 const $ = (id) => document.getElementById(id);
@@ -232,7 +233,7 @@ function frame(now) {
     game.sea.update(sim, game.mode === 'sea' || game.mode === 'deck');
     game.wild.update(sim); game.townfolk.update(sim); game.workers.update(sim); game.animals.update(sim);
     if (game.mode !== 'sea') game.land.update(sim);
-    if (game.mode === 'land') game.reveal(game.land.player.x, game.land.player.z, 200);
+    if (game.mode === 'land') { game.reveal(game.land.player.x, game.land.player.z, 200); coverView(game.land.isl, game.land.player.x, game.land.player.z, game.camera.position.x, game.camera.position.z); }
     game.ctx = game.mode === 'sea' ? game.sea.context() : game.land.context();
     if (input.take('ctx') && game.ctx) { audio.ui(); game.ctx.run(); }
     if (input.take('menu')) game.ui.openMenu();

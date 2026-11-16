@@ -327,4 +327,4 @@ export const CHARTS = {
   crown: { name: 'The Crown', desc: 'Five stars in a ring over the open water.' },
   wolf: { name: 'The Wolf', desc: 'Pale stars that only show after midnight.' },
 };
-export const CHART_CHANCE = 0.08; // a hidden chest holds a chart this often, until you have them all
+export const CHART_CHANCE = 0.03; // a hidden chest holds a chart this often, until you have them all

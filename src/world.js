@@ -246,10 +246,11 @@ function bushGeo() { const m = new Mesher(); m.add(ball(1), 0x4a6232, [0, 0.45, 
 
 // Hills and mountains on the big islands, reeds in the shallows, dead trees on the cursed ones. Placed last, so nothing else moves.
 function dressScenery(isl, g) {
+  const keep = (obj, scale) => { SCENERY.push({ isl, obj, r: 22 * scale }); return obj; };
   const rnd = Math.random, hi = isl.h > 20;
   const hills = hi ? ['hills_A_trees', 'hills_B_trees', 'mountain_A_grass_trees', 'mountain_B_grass_trees'] : ['hill_single_A', 'hill_single_B', 'hills_A_trees'];
   const n = Math.round(isl.r / 90);
-  for (let i = 0; i < n; i++) { const p = isl.spot(2, isl.h * 0.9, 14); placeModel(g, NAT + hills[Math.floor(rnd() * hills.length)] + '.gltf', p.x, heightAt(p.x, p.z) - 0.3, p.z, rnd() * TAU, (isl.r / 240) * (0.8 + rnd() * 0.4)); }
+  for (let i = 0; i < n; i++) { const p = isl.spot(2, isl.h * 0.9, 14); { const sc = (isl.r / 240) * (0.8 + rnd() * 0.4); placeModel(g, NAT + hills[Math.floor(rnd() * hills.length)] + '.gltf', p.x, heightAt(p.x, p.z) - 0.3, p.z, rnd() * TAU, sc).then((m) => m && SCENERY.push({ isl, obj: m, r: 22 * sc })); } }
   for (let i = 0; i < Math.round(isl.r / 35); i++) { const p = isl.spot(-1.4, 0.4, 8); placeModel(g, NAT + (rnd() < 0.5 ? 'waterplant_A' : 'waterlily_A') + '.gltf', p.x, heightAt(p.x, p.z) - 0.15, p.z, rnd() * TAU, 1.1 + rnd() * 0.6); }
   if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') for (let i = 0; i < 4; i++) { const p = isl.spot(1.5, 30, 12); placeModel(g, NAT + 'tree_dead_medium.gltf', p.x, heightAt(p.x, p.z) - 0.1, p.z, rnd() * TAU, 1.1); }
 }
@@ -268,6 +269,24 @@ function dressWith(mesh, procGeo, file) {
     const old = mesh.geometry; mesh.geometry = merged; mesh.material = mat; old.dispose();
   });
 }
+const SCENERY = []; // big placed models (hills, mountains) that can step aside from the camera
+const DECOR = []; // scattered instances per island, so trees can clear away from the camera
+export function coverView(isl, px, pz, cx, cz) {
+  for (const o of SCENERY) { if (o.isl !== isl || !o.obj) continue; const d = Math.hypot(o.obj.position.x - cx, o.obj.position.z - cz); o.obj.visible = d > o.r; }
+  for (const e of DECOR) {
+    if (e.isl !== isl) continue;
+    const { mesh, base, n } = e, arr = mesh.instanceMatrix.array;
+    const dx = cx - px, dz = cz - pz, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L; let changed = false;
+    for (let i = 0; i < n; i++) {
+      const o = i * 16, x = base[o + 12], z = base[o + 14], rx = x - px, rz = z - pz;
+      const along = rx * ux + rz * uz, across = Math.abs(rx * uz - rz * ux);
+      const hide = (along > -2.2 && along < L + 1 && across < 2.6 && Math.hypot(rx, rz) < 9) || Math.hypot(x - cx, z - cz) < 9; // the line to you, and whatever stands round the camera
+      const s = hide ? 0 : 1;
+      if (e.state[i] !== s) { e.state[i] = s; arr[o] = base[o] * s; arr[o + 5] = base[o + 5] * s; arr[o + 10] = base[o + 10] * s; changed = true; }
+    }
+    if (changed) mesh.instanceMatrix.needsUpdate = true;
+  }
+}
 function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
   const mesh = new THREE.InstancedMesh(geo, MAT, count), d = new THREE.Object3D(), R = isl.rand;
   let n = 0;
@@ -282,6 +301,7 @@ function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
   }
   mesh.count = n; mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
   group.add(mesh);
+  if (n) DECOR.push({ mesh, isl, n, base: Float32Array.from(mesh.instanceMatrix.array.subarray(0, n * 16)), state: new Uint8Array(n).fill(1) });
   return mesh;
 }
 
