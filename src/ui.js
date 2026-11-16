@@ -1,6 +1,6 @@
 // HUD and menus. Plain DOM over the canvas.
 import * as THREE from 'three';
-import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, CHARTS, GUILDS, HANDS, GRADES, STATIONS, AMMO_PACK, TREE, TREE_BRANCH, POINTS_PER_RANK, STORES } from './data.js';
+import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, CHARTS, GUILDS, PORT_REGION, REGION_REFIT, HANDS, GRADES, STATIONS, AMMO_PACK, TREE, TREE_BRANCH, POINTS_PER_RANK, STORES } from './data.js';
 import { createMap } from './map.js';
 import { flagTexture } from './ship.js';
 import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave, makeHand, hireCost, addMorale, moraleWord, crewBonus, guildPrice, sk, feat, skillPoints, nodeRank, nodeOpen, storesFull, storesCost } from './state.js';
@@ -242,6 +242,7 @@ export function createUI(game) {
       Refit() {
         const s = S(), st = shipStats(s), rc = repairCost(s);
         return `<div class="stat"><div><small>Hull</small><b>${Math.round(s.ship.hp * st.maxHp)} / ${st.maxHp}</b></div><div><small>Speed</small><b>${(st.speed * 1.2).toFixed(1)} kn</b></div><div><small>Guns a side</small><b>${st.guns}</b></div><div><small>Hold</small><b>${st.cargo}</b></div><div><small>Hands</small><b>${st.crew} / ${st.berths}</b></div><div><small>Brig cells</small><b>${st.brig}</b></div></div>`
+          + (() => { const here = ui.panel && ui.panel.isl ? PORT_REGION[ui.panel.isl.id] : null, rf = here ? REGION_REFIT[here] : null; return rf ? row(rf.name, rf.desc, s.refit && s.refit[here] ? '<span class="cost">Fitted</span>' : `${costHtml(rf)}${btn('Fit', 'refit', here, 'go', !can(s, rf))}`) : ''; })()
           + row('Repair the hull', rc ? 'Patch every hole and scrape the keel. Bigger and better-fitted ships cost more to mend.' : 'She is sound.', `${costHtml({ gold: rc })}${btn('Repair', 'repair', '', 'go', !rc || s.gold < rc)}`)
           + Object.entries(SHIP_UPGRADES).map(([k, u]) => { const lv = s.ship.up[k], c = upgradeCost(s, k), full = lv >= MAX_UPGRADE; return row(`${u.name}${pips(lv, MAX_UPGRADE)}`, u.desc, full ? '<span class="cost">Complete</span>' : `${costHtml(c)}${btn('Fit', 'upgrade', k, '', !can(s, c))}`); }).join('');
       },
@@ -257,8 +258,8 @@ export function createUI(game) {
     },
     smith: {
       tabs: ['Blades', 'Firearms'],
-      Blades() { const s = S(); return SWORDS.map((w, i) => row(w.name, `${w.dmg} damage a stroke`, i === s.sword ? '<span class="cost">In hand</span>' : i < s.sword ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Forge', 'sword', i, '', !can(s, w))}`)).join(''); },
-      Firearms() { const s = S(); return row(`${BOMB.name} (you carry ${s.bombs} of ${BOMB.max})`, BOMB.desc, `${costHtml(BOMB)}${btn('Buy', 'flask', '', 'go', s.gold < BOMB.gold || s.bombs >= BOMB.max)}`) + GUNS.map((w, i) => row(w.name, `${w.dmg} damage · ${w.reload.toFixed(1)}s reload`, i === s.gun ? '<span class="cost">In hand</span>' : i < s.gun ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Buy', 'gun', i, '', !can(s, w))}`)).join(''); },
+      Blades() { const s = S(), here = ui.panel && ui.panel.isl ? PORT_REGION[ui.panel.isl.id] : null; return SWORDS.map((w, i) => (w.region && w.region !== here && i > s.sword ? '' : row(w.name, `${w.dmg} damage a stroke`, i === s.sword ? '<span class="cost">In hand</span>' : i < s.sword ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Forge', 'sword', i, '', !can(s, w))}`))).join(''); },
+      Firearms() { const s = S(), here = ui.panel && ui.panel.isl ? PORT_REGION[ui.panel.isl.id] : null; return row(`${BOMB.name} (you carry ${s.bombs} of ${BOMB.max})`, BOMB.desc, `${costHtml(BOMB)}${btn('Buy', 'flask', '', 'go', s.gold < BOMB.gold || s.bombs >= BOMB.max)}`) + GUNS.map((w, i) => (w.region && w.region !== here && i > s.gun ? '' : row(w.name, `${w.dmg} damage · ${w.reload.toFixed(1)}s reload`, i === s.gun ? '<span class="cost">In hand</span>' : i < s.gun ? '<span class="cost">Owned</span>' : `${costHtml(w)}${btn('Buy', 'gun', i, '', !can(s, w))}`))).join(''); },
     },
     market: {
       tabs: [],
@@ -493,6 +494,7 @@ export function createUI(game) {
     sail(k) { S().ship.sail = k; game.sea.player.model.sailMat.color.set(SAIL_COLORS[k]); audio.ui(); },
     sword(i) { const s = S(); if (pay(s, SWORDS[i])) { s.sword = +i; game.land.refreshGear(); audio.good(); } },
     gun(i) { const s = S(); if (pay(s, GUNS[i])) { s.gun = +i; audio.good(); } },
+    refit(r) { const s = S(), rf = REGION_REFIT[r]; if (s.refit && s.refit[r]) return; if (!pay(s, rf)) return; s.refit = Object.assign({}, s.refit, { [r]: true }); game.sea.refreshStats(); audio.good(); ui.toast(`${rf.name} fitted.`, 'gold'); },
     buy(g, p) { const s = S(), bp = buyPrice(p.isl.id, g); if (cargoUsed(s) < shipStats(s).cargo && pay(s, { gold: bp })) { s.cargo[g] = (s.cargo[g] || 0) + 1; audio.coin(); } },
     sell(g, p) { const s = S(), n = s.cargo[g] || 0; if (n) { s.gold += n * sellPrice(p.isl.id, g); game.emit('sell', { gold: n * sellPrice(p.isl.id, g) }); s.cargo[g] = 0; audio.coin(); } },
     build(id) { const s = S(); if ((s.base.b[id] || 0) < MAX_BUILDING && pay(s, buildingCost(s, id))) { const p = pending(s); s.gold += p.gold; s.timber += p.timber; s.iron += p.iron; s.base.t = Date.now(); s.base.b[id] = (s.base.b[id] || 0) + 1; refreshBase(game.world, s); game.sea.refreshStats(); audio.good(); game.emit('build', { building: id }); } },

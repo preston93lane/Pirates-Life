@@ -72,12 +72,16 @@ export const SWORDS = [
   { name: "Officer's Sabre", dmg: 25, gold: 700, iron: 18 },
   { name: 'Damascus Blade', dmg: 33, gold: 1700, iron: 36 },
   { name: 'Stormbreaker', dmg: 44, gold: 4200, iron: 70 },
+  { name: 'Emberglass Cutlass', dmg: 42, gold: 2600, iron: 60, region: 'ember' },
+  { name: 'Frostglass Sabre', dmg: 46, gold: 2600, iron: 60, region: 'frost' },
 ];
 export const GUNS = [
   { name: 'Flintlock Pistol', dmg: 42, reload: 5.0, gold: 0, iron: 0 },
   { name: 'Brace of Pistols', dmg: 52, reload: 3.6, gold: 320, iron: 10 },
   { name: 'Long Musket', dmg: 82, reload: 4.4, gold: 900, iron: 22 },
   { name: 'Dragon Blunderbuss', dmg: 118, reload: 4.6, gold: 2400, iron: 48 },
+  { name: 'Cinder Musket', dmg: 120, reload: 3.8, gold: 3000, iron: 70, region: 'ember' },
+  { name: 'Harpoon Gun', dmg: 112, reload: 3.6, gold: 3000, iron: 70, region: 'frost' },
 ];
 
 export const GOODS = {
@@ -361,3 +365,10 @@ SEA_FOES.wyrm = { name: 'The Ash Wyrm', cls: 'galleon', faction: 'ghost', hp: 90
 
 // ----- the Frost Sea: ice reavers that cut your rigging with chain shot -----
 SEA_FOES.reaver = { name: 'Ice Reaver', cls: 'xebec', faction: 'ghost', hp: 260, guns: 6, dmg: 9, crew: ['frostraider', 'frostraider', 'frostraider', 'marksman', 'captain'], gold: [220, 340], goods: 3, xp: 160 };
+
+// Gear that only the fortified ports of each sea sell, and their ship refits.
+export const PORT_REGION = { ember_port: 'ember', frost_port: 'frost' };
+export const REGION_REFIT = {
+  ember: { name: 'Fireproof Hull', desc: 'Fire shot and burning decks do no harm to your ship, in any sea.', gold: 2200, timber: 40, iron: 50 },
+  frost: { name: 'Icebreaker Bow', desc: '+20% hull and +10% speed, in any sea.', gold: 2200, timber: 40, iron: 50 },
+};

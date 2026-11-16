@@ -42,7 +42,7 @@ export function newSave() {
     ship: { cls: 'cutter', up: null, hp: 1, sail: 'bone' },
     owned: { cutter: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
-    tree: {}, charts: {}, guild: null, folk: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
+    tree: {}, charts: {}, guild: null, refit: {}, folk: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
     crew: null, morale: 70, station: 'even', atWill: false, hire: null,
     bombs: 2, bless: 0, caves: {}, music: true, daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,
@@ -73,7 +73,7 @@ export const SAIL_COLORS = { bone: 0xd9cdb0, tar: 0x2a2826, blood: 0x7d1f1a, sea
 export function shipStats(s) {
   const c = SHIP_CLASSES[s.ship.cls], u = s.ship.up, b = crewBonus(s), m = 0.94 + 0.12 * ((s.morale ?? 70) / 100), stn = STATIONS[s.station] || STATIONS.even;
   return {
-    cls: c, maxHp: Math.round(c.hp * (1 + 0.18 * u.hull)), speed: c.speed * (1 + 0.05 * u.sails) * (1 + b.speed) * m * stn.speed * (1 + 0.025 * sk(s, 'seaman')) * (s.favour ? 1.08 : 1), turn: c.turn * (1 + 0.05 * u.sails) * (1 + b.speed) * (1 + 0.025 * sk(s, 'seaman')) * (feat(s, 'hull') ? 1.15 : 1),
+    cls: c, maxHp: Math.round(c.hp * (1 + 0.18 * u.hull) * (s.refit && s.refit.frost ? 1.2 : 1)), speed: c.speed * (1 + 0.05 * u.sails) * (s.refit && s.refit.frost ? 1.1 : 1) * (1 + b.speed) * m * stn.speed * (1 + 0.025 * sk(s, 'seaman')) * (s.favour ? 1.08 : 1), turn: c.turn * (1 + 0.05 * u.sails) * (1 + b.speed) * (1 + 0.025 * sk(s, 'seaman')) * (feat(s, 'hull') ? 1.15 : 1),
     guns: c.guns, dmg: 9 * (1 + 0.15 * u.cannons) * (1 + b.dmg) * (1 + 0.04 * sk(s, 'gunnery')), reload: (4.2 * (1 - 0.07 * u.cannons) * stn.reload) / (1 + b.reload) / m, range: 150,
     brig: u.brig || 0, cargo: Math.round(c.cargo * (1 + 0.25 * u.hold)), crew: s.crew.length, berths: c.berths + u.crew + (s.base.b.quarters || 0) + Math.floor(sk(s, 'lead') / 2) + (feat(s, 'born') ? 2 : 0),
     repair: b.repair, stnRepair: stn.repair, loot: b.loot + 0.04 * sk(s, 'plunder'), heal: b.heal,

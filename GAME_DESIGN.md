@@ -470,3 +470,5 @@ particles and sharpness.
 
 - **Eruptions** are rare: the first about 90 seconds after arrival, then every 4 to 7 minutes.
 - **Fortified ports.** Ashhold (Ember Sea) and Icewatch (Frost Sea) are walled safe harbours with a tavern, shipwright, blacksmith and market. No bandit camp, and no raiders spawn within about 420 units.
+
+- **Region gear.** Ashhold (Ember) sells the Emberglass Cutlass (42 damage), the Cinder Musket (120 damage) and the Fireproof Hull refit (fire does no harm to your ship). Icewatch (Frost) sells the Frostglass Sabre (46 damage), the Harpoon Gun (112 damage) and the Icebreaker Bow refit (+20% hull, +10% speed). Each shows only at its own port, and stays owned after you leave.

@@ -639,6 +639,7 @@ export function createSea(game) {
     for (const k in sea.gunCd) sea.gunCd[k] = Math.max(0, sea.gunCd[k] - dt);
     if (active && p.alive && p.hp < p.maxHp) { p.hp = Math.min(p.maxHp, p.hp + (p.stats.repair + p.stats.stnRepair * p.maxHp) * dt); if (p.stats.stnRepair && p.burn > 0) p.burn -= dt * 2; }
     sea.exposed = Math.max(0, (sea.exposed || 0) - dt); sea.raidT = Math.max(0, (sea.raidT || 0) - dt); sea.hookT = Math.max(0, (sea.hookT || 0) - dt);
+    if (p.burn > 0 && game.save.refit && game.save.refit.ember) p.burn = 0; // the Fireproof Hull
     if (p.alive && p.burn > 0 && !p.frozen) { p.burn -= dt; p.hp -= 2 * dt; if (Math.random() < dt * 12) fx.fire(p.x + rand(-3, 3), p.model.deckY + 1.5, p.z + rand(-3, 3), 2); if (p.hp <= 0) sink(p, null); }
     p.sailHp = Math.min(1, p.sailHp + 0.02 * dt); for (const s of sea.ships) if (s.alive) s.sailHp = Math.min(1, s.sailHp + 0.008 * dt);
     for (const s of sea.ships) if (s.alive && s.burn > 0 && !s.frozen) {
