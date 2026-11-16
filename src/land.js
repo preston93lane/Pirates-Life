@@ -154,7 +154,7 @@ export function createLand(game) {
       if (sp.foe === 'crabking' && s.bosses.crabking && now - s.bosses.crabking < 20 * 60000) return;
       if (isl.kind === 'fort' && !raidReady) return;
       if (sp.navy && navyCold) return;
-      const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl * (sp.navy ? 1.45 : 1)); a.spawnI = i; a.grp = sp.navy ? 'navy' : isl.kind === 'fort' ? 'fort' : null;
+      const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl * (sp.navy ? 1.45 : sp.wild ? 1.25 : 1)); a.spawnI = i; a.grp = sp.navy ? 'navy' : isl.kind === 'fort' ? 'fort' : null;
       if (sp.foe === 'skeleton') { a.state = 'buried'; a.ch.root.visible = false; }
     });
     if (isl.id === 'regal' && isWanted(s)) { for (let i = 0; i < 4; i++) { const a = makeActor('soldier', isl.site.x + isl.dir[0] * 18 + rand(-6, 6), isl.site.z + isl.dir[1] * 18 + rand(-6, 6), 1, lvl); a.state = 'chase'; } game.toast('The garrison knows your face!', 'warn'); }

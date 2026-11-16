@@ -134,6 +134,7 @@ function plan(isl) {
   for (let i = 0; i < nChest; i++) isl.chests.push(Object.assign(spot(2, 40), { id: `${isl.id}:${i}`, tier: isl.kind === 'town' ? 1 : 2 }));
 
   const sp = (foe, p) => isl.spawns.push({ foe, x: p.x, z: p.z });
+  isl.biome = isl.jungle ? 'jungle' : isl.kind === 'crab' ? 'dry' : 'temperate';
   if (isl.navy) { // a garrison far stronger than any bandit camp
     const n = isl.navy, big = n.S > 30, h = n.S / 2 - 3.5, nv = (foe, lx, lz) => { const p = n.at(lx, lz); isl.spawns.push({ foe, x: p.x, z: p.z, navy: true }); };
     (big ? [[-8, 6], [8, 6], [-11, -3], [11, -3], [0, 1], [-4, -9], [4, -9], [0, 11]] : [[-4, 3], [4, 3], [0, -2], [0, 6]]).forEach(([x, z]) => nv('soldier', x, z));
@@ -165,6 +166,12 @@ function plan(isl) {
     for (let i = 0; i < 2; i++) sp('crab', spot(0.6, 3, 4));
   } else if (isl.kind === 'hideout') {
     Object.keys(BUILDINGS).forEach((id, i) => { const a = (i / 6) * TAU + 0.5; isl.plots.push(Object.assign(local(Math.sin(a) * 26, Math.cos(a) * 26), { id, face: a })); });
+  }
+  // wild hostiles roam every island away from the ports, matched to its biome. Placed last so nothing else moves.
+  if (isl.kind !== 'town' && isl.kind !== 'hideout' && !isl.navy) {
+    const pick = isl.biome === 'jungle' ? ['brigand', 'brigand', 'marksman'] : isl.biome === 'dry' ? ['crab', 'crab', 'brigand'] : ['brigand', 'marksman', 'brigand'];
+    const n = Math.max(2, Math.round(isl.r / 26));
+    for (let i = 0; i < n; i++) { const p = spot(1.2, isl.h * 1.2, 16); isl.spawns.push({ foe: pick[i % pick.length], x: p.x, z: p.z, wild: true }); }
   }
 }
 
@@ -531,6 +538,7 @@ export function refreshBase(world, save) {
   all.add(cyl(1.2, 1.3, 0.3, 7), PAL.darkRock, [s.x, sy + 0.1, s.z]); all.add(cone(0.8, 1.1, 5), 0xff9a3c, [s.x, sy + 0.7, s.z], [0, 0, 0], 1, 0);
   all.add(cyl(0.1, 0.12, 9, 5), PAL.timber, [s.x + 4, sy + 4.5, s.z]); all.add(box(2.6, 1.6, 0.06), 0x161616, [s.x + 5.35, sy + 8, s.z]);
   world.baseMesh = all.mesh(); world.scene.add(world.baseMesh);
+  if (world.onBase) world.onBase();
 }
 
 export function chestMesh(tier = 1) {
@@ -643,16 +651,19 @@ export function createWorld(scene) {
     if (isl.kind === 'crab') crabNest(m, isl);
     if (isl.navy) navyFort(m, isl, g);
     dressScenery(isl, g);
-    const dense = isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1;
+    // biomes: jungle, dry scrub, or temperate woods. Away from the ports the forest is dense.
+    const wild = isl.kind === 'town' ? 1 : 3.5;
+    const dense = (isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1) * wild;
     g.add(m.mesh());
     isl.blocks = isl.colliders.filter((c) => c.r > 1.4).map((c) => ({ x: c.x, z: c.z, r: c.r }));
     dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.62, true), rock, NAT + 'rock_single_B.gltf');
     dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 0.7, true), rock, NAT + 'rock_single_D.gltf'); // crags up high
     dressWith(scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35), palm, NAT + 'tree_single_A.gltf');
     if (isl.r > 100) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
+    if (isl.r > 100 && wild > 1) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.2 * wild), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
     dressWith(scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0), bush, NAT + 'trees_A_small.gltf');
     scatter(g, isl, fern, Math.round(isl.r * 0.28 * dense), 1.8, 40, 0.8, 1.5, 0);
-    if (isl.jungle) dressWith(scatter(g, isl, jtree, Math.round(isl.r * 0.42), 4, isl.h * 1.4, 0.8, 1.5, 0.5), jtree, NAT + 'trees_B_large.gltf');
+    if (isl.jungle) dressWith(scatter(g, isl, jtree, Math.round(isl.r * 0.42 * wild), 4, isl.h * 1.4, 0.8, 1.5, 0.5), jtree, NAT + 'trees_B_large.gltf');
     if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') scatter(g, isl, dead, 8, 1.5, 40, 0.8, 1.4, 0.3);
     if (isl.caveAt) { const c = isl.caveAt, cy = heightAt(c.x, c.z), k = new Kit(KINDS); // cave mouth
       for (const [dx, sc] of [[-2.6, 2.6], [2.6, 2.8], [0, 2.2]]) k.add(new THREE.DodecahedronGeometry(1, 0), PAL.darkRock, [c.x + dx, cy + (dx ? 1.6 : 4.4), c.z], [dx, dx * 2, 0.3], [sc, dx ? sc * 1.3 : 1.4, sc], 0.1, 'plain');

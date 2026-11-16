@@ -61,3 +61,59 @@ export function createTownFolk(game) {
   }
   return { update, count: walkers.length };
 }
+
+// Hired workers at your hideout. One per level of each working building: lumber hands fetch logs from the palms,
+// miners carry ore from the rocks, and the others tend their building. They are scenery, like the townspeople.
+export function createWorkers(game) {
+  const world = game.world, isl = world.byId.rest;
+  let crew = [];
+  const LOAD = { lumber: 'log', mine: 'ore', still: 'cask', quarters: 'pack', battery: 'shot', vault: 'coin' };
+  const cargoMat = { log: 0x7a5a36, ore: 0x6a6a72, cask: 0x8a5a2a, pack: 0x9a8a6a, shot: 0x2b2d30, coin: 0xe9c46a };
+  function clear() { for (const w of crew) w.ch.root.removeFromParent(); crew = []; }
+  function spawn() {
+    clear();
+    const save = game.save, here = world.byId.rest;
+    for (const pl of isl.plots) {
+      const lvl = save.base.b[pl.id] || 0;
+      for (let i = 0; i < lvl; i++) {
+        const ch = buildCharacter(pick(['crew', 'brigand', 'merchant', 'keeper']), { noShadow: false });
+        const cargo = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.5), new THREE.MeshLambertMaterial({ color: cargoMat[LOAD[pl.id]] || 0x888888, flatShading: true }));
+        cargo.position.set(0, 1.25, 0.45); cargo.visible = false; ch.root.add(cargo);
+        here.group.add(ch.root);
+        const home = { x: pl.x + Math.sin(pl.face) * 4, z: pl.z + Math.cos(pl.face) * 4 };
+        crew.push({ pl, ch, cargo, home, x: home.x, z: home.z, tx: home.x, tz: home.z, phase: 'home', wait: rand(1, 5), speed: 1.6 + rand(0.8), face: 0 });
+      }
+    }
+  }
+  // the work site for a worker: a palm to chop, a rock to dig, or a spot near the building to tend
+  function site(w) {
+    if (w.pl.id === 'lumber') { const c = pick(isl.colliders.filter((c) => c.r < 1.5 && !c.base)); if (c) return { x: c.x + 1.2, z: c.z }; }
+    if (w.pl.id === 'mine') { const b = pick(isl.blocks || []); if (b) return { x: b.x + 1.5, z: b.z }; }
+    return { x: w.home.x + rand(-4, 4), z: w.home.z + rand(-4, 4) };
+  }
+  function update(dt) {
+    const cam = game.camera.position, near = Math.hypot(cam.x - isl.x, cam.z - isl.z) < 420;
+    for (const w of crew) {
+      w.ch.root.visible = near; if (!near) continue;
+      const dx = w.tx - w.x, dz = w.tz - w.z, d = Math.hypot(dx, dz);
+      if (d > 0.5 && w.wait <= 0) {
+        const nx = w.x + (dx / d) * w.speed * dt, nz = w.z + (dz / d) * w.speed * dt;
+        if (!isl.colliders.some((c) => !c.base && Math.hypot(nx - c.x, nz - c.z) < c.r + 0.6) || w.phase === 'home') { w.x = nx; w.z = nz; }
+        w.face = Math.atan2(dx, dz); w.ch.anim.state = 'run'; w.ch.anim.speed = w.speed;
+      } else {
+        w.ch.anim.state = 'idle'; w.wait -= dt;
+        if (w.wait <= 0) {
+          if (w.phase === 'home' && w.pl.id !== 'vault' && w.pl.id !== 'battery') { w.phase = 'out'; w.tx = site(w).x; w.tz = site(w).z; w.wait = 0; }
+          else if (w.phase === 'out') { w.phase = 'back'; w.wait = 1.5 + rand(1); w.cargo.visible = true; }
+          else if (w.phase === 'back') { w.phase = 'home'; w.tx = w.home.x; w.tz = w.home.z; w.cargo.visible = false; w.wait = rand(2, 4); }
+          else { w.phase = 'out'; w.tx = site(w).x; w.tz = site(w).z; w.wait = rand(1, 3); }
+        }
+        if (w.phase === 'back' && w.wait > 0) { w.ch.anim.state = 'idle'; } // work done, then back home
+      }
+      w.ch.root.position.set(w.x, groundAt(w.x, w.z), w.z);
+      w.ch.root.rotation.y = damp(w.ch.root.rotation.y, w.face, 6, dt);
+      w.ch.update(dt);
+    }
+  }
+  return { spawn, update, count: () => crew.length };
+}
