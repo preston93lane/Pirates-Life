@@ -20,6 +20,9 @@ export const ISLANDS = [
   { cave: true, jungle: true, id: 'ember_c', name: 'Emberwake Isle', x: -2750, z: 1250, r: 170, h: 34, seed: 233, kind: 'ruins', land: 4.1, blurb: 'Black sand and warm springs.', region: 'ember' },
   { jungle: true, id: 'ember_d', name: 'Idol Reef', x: -2150, z: 1350, r: 110, h: 18, seed: 241, kind: 'crab', land: 5.6, blurb: 'Crab nests in the reeds.', region: 'ember' },
   { jungle: true, id: 'ember_e', name: 'Ashfall Key', x: -2900, z: 2100, r: 95, h: 14, seed: 251, kind: 'islet', land: 1.0, blurb: 'A lonely key under falling ash.', region: 'ember' },
+  // ----- fortified ports: safe harbours inside each new sea -----
+  { id: 'ember_port', name: 'Ashhold', x: -2500, z: 2250, r: 150, h: 26, seed: 261, kind: 'town', land: 3.1, blurb: 'A walled port of black stone. No raiders come inside its reef.', region: 'ember', safe: true, cave: false },
+  { id: 'frost_port', name: 'Icewatch', x: 2750, z: 2750, r: 150, h: 26, seed: 361, kind: 'town', land: 4.0, blurb: 'A walled port of ice and iron. Its guns keep the Frost Reavers off.', region: 'frost', safe: true, cave: false },
   // ----- the Frost Sea: cold, stormy and dry, beyond the charts (opened by The Wolf) -----
   { id: 'frost_a', name: 'Stormhold', x: 2500, z: 2300, r: 160, h: 26, seed: 311, kind: 'ruins', land: 3.4, blurb: 'A ruined watch tower on a stormy cliff.', region: 'frost' },
   { id: 'frost_b', name: 'Wolfmere', x: 2150, z: 1650, r: 110, h: 18, seed: 323, kind: 'crab', land: 1.8, blurb: 'Grey rocks where wolves den.', region: 'frost' },

@@ -91,7 +91,7 @@ function plan(isl) {
   const [k, fr, fy] = SITE[isl.kind];
   isl.site = { x: isl.x + isl.dir[0] * isl.r * k, z: isl.z + isl.dir[1] * isl.r * k };
   isl.flats = fr ? [{ x: isl.site.x, z: isl.site.z, r: fr, y: fy }] : [];
-  if (isl.kind === 'town') { // a bandit camp on the far side
+  if (isl.kind === 'town' && !isl.safe) { // a bandit camp on the far side
     isl.camp = { x: isl.x - isl.dir[0] * isl.r * 0.42, z: isl.z - isl.dir[1] * isl.r * 0.42 };
     if (isl.id === 'regal') { isl.navy = { x: isl.camp.x, z: isl.camp.z, S: 38, rot: isl.land, name: 'Fort Regal' }; let top = 8; for (let i = 0; i < 16; i++) { const an = (i / 16) * TAU; for (const rr of [18, 34, 48]) top = Math.max(top, heightRaw(isl, isl.camp.x + Math.sin(an) * rr, isl.camp.z + Math.cos(an) * rr)); } isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 33, soft: 2.4, y: Math.min(44, top + 2) }); }
     else isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 14, y: 4 });
@@ -143,7 +143,7 @@ function plan(isl) {
     isl.navyVault = n.at(0, -h + 0.5);
   }
   if (isl.kind === 'town' && isl.navy) { /* the fort stands where a camp would be */ }
-  else if (isl.kind === 'town') {
+  else if (isl.kind === 'town' && !isl.safe) {
     for (let i = 0; i < 3; i++) sp('brigand', { x: isl.camp.x + Math.sin(i * 2.1) * 5, z: isl.camp.z + Math.cos(i * 2.1) * 5 });
     isl.chests.push({ x: isl.camp.x, z: isl.camp.z, id: `${isl.id}:camp`, tier: 2 });
   } else if (isl.kind === 'ruins') {
@@ -395,7 +395,7 @@ function torchPost(m, x, z) { const y = heightAt(x, z); m.add(cyl(0.07, 0.1, 2.4
 function town(m, isl, group) {
   const L = isl.local, id = isl.id, toSite = (p) => Math.atan2(isl.site.x - p.x, isl.site.z - p.z), aD = isl.land, aP = Math.atan2(isl.perp[0], isl.perp[1]);
   const theme = id === 'regal' ? { wall: PAL.white, roof: PAL.tile, alt: PAL.stone } : id === 'shoals' ? { wall: PAL.darkTimber, roof: 0x2d2b2a, alt: PAL.timber } : { wall: PAL.plaster, roof: PAL.slate, alt: PAL.timber };
-  const names = { saltmere: { tavern: 'Mara', shipwright: 'Old Tobias', smith: 'Brenna', market: 'Quill' }, regal: { tavern: 'Mr. Finch', shipwright: 'Master Hale', market: 'Widow Ames' }, shoals: { tavern: 'One-Eye Sal', smith: 'The Dutchman', market: 'Nan' } }[id];
+  const names = { ember_port: { tavern: 'Mother Cinder', shipwright: 'Old Torvald', smith: 'Hob Ashgrip', market: 'Ruddy Nell' }, frost_port: { tavern: 'Ada Frostmere', shipwright: 'Ivar the Stout', smith: 'Gunnar', market: 'Sigrid' }, saltmere: { tavern: 'Mara', shipwright: 'Old Tobias', smith: 'Brenna', market: 'Quill' }, regal: { tavern: 'Mr. Finch', shipwright: 'Master Hale', market: 'Widow Ames' }, shoals: { tavern: 'One-Eye Sal', smith: 'The Dutchman', market: 'Nan' } }[id];
   const ROLE = { tavern: ['Tavern keeper', 'keeper', 'TAVERN'], shipwright: ['Shipwright', 'wright', 'SHIPWRIGHT'], smith: ['Blacksmith', 'smith', 'BLACKSMITH'], market: ['Merchant', 'merchant', 'MARKET'] };
   const npc = (kind, b, signY = 5.4) => {
     const [role, look, label] = ROLE[kind], door = kind === 'tavern';
@@ -485,12 +485,14 @@ function town(m, isl, group) {
     for (let i = 0; i < 3; i++) { const p = L(30 + i * 3.2, -20), y = heightAt(p.x, p.z); m.add(cyl(0.07, 0.07, 2.6, 4), PAL.timber, [p.x, y + 1.3, p.z]); if (i) m.add(box(3.2, 1.4, 0.04), 0x6a6a58, [p.x - isl.dir[0] * 1.6, y + 1.8, p.z - isl.dir[1] * 1.6], [0, aD + Math.PI / 2, 0], 1, 0.12, 'plain'); } // drying nets
     [[14, 2, 1], [15, 3.2, 0.8], [-2, -20, 1], [26, 18, 1]].forEach(([u, v, s]) => { const p = L(u, v); barrel(m, p.x, p.z, s); }); [[10, -4, 1], [-18, 8, 0.9], [27, 16, 1.1]].forEach(([u, v, s], i) => { const p = L(u, v); crate(m, p.x, p.z, s, i); });
   }
+  if (isl.safe) npc('shipwright', shipyard(L(-36, -24), aP), 7.2); // the fortified ports have a yard too
   // townsfolk with something to ask of a captain
   for (const f of FOLK) if (f.isl === id) { const p = L(f.at[0], f.at[1]), fig = staticFigure(f.look); fig.position.set(p.x, heightAt(p.x, p.z), p.z); fig.rotation.y = toSite(p) + 0.6; group.add(fig);
     isl.npcs.push({ id: `${id}:folk:${f.id}`, kind: 'folk', folk: f.id, name: f.name, role: f.role, x: p.x, z: p.z }); isl.colliders.push({ x: p.x, z: p.z, r: 0.5 });
     const mk = signSprite('!'); mk.scale.set(0.9, 0.9, 1); mk.position.set(p.x, heightAt(p.x, p.z) + 2.7, p.z); group.add(mk); }
   if (isl.navy) return;
-  // bandit camp
+  // bandit camp (not in the safe ports)
+  if (isl.safe) return;
   const k = isl.camp, ky = heightAt(k.x, k.z);
   m.add(cone(2.4, 2.6, 4), 0x6f6448, [k.x + 5, ky + 1.3, k.z + 2], [0, 0.5, 0]); m.add(cone(2.2, 2.4, 4), 0x5d5540, [k.x - 4, ky + 1.2, k.z + 4], [0, 1.2, 0]);
   m.add(cone(0.7, 0.9, 5), 0xff9a3c, [k.x + 1.5, ky + 0.45, k.z - 3], [0, 0, 0], 1, 0); m.add(cyl(1, 1.1, 0.25, 7), PAL.darkRock, [k.x + 1.5, ky + 0.1, k.z - 3]);

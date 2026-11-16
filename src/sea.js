@@ -68,7 +68,8 @@ export function createSea(game) {
     const reg = game.seas && game.seas.region;
     if (reg) {
       const type = reg.id === 'ember' ? 'ember' : 'reaver';
-      for (let i = 0; i < 2 && count('ghost') < 5; i++) { const pos = openWater(sea.player.x, sea.player.z, 260, 620); if (pos) sea.spawn(type, pos); }
+      const ports = ISLANDS.filter((i) => i.safe); // the fortified ports are kept clear of raiders
+      for (let i = 0; i < 2 && count('ghost') < 5; i++) { const pos = openWater(sea.player.x, sea.player.z, 260, 620); if (pos && !ports.some((q) => dist2(pos.x, pos.z, q.x, q.z) < 420)) sea.spawn(type, pos); }
       const sr = ISLAND_BY.ember_b, ready = !game.save.bosses.wyrm || Date.now() - game.save.bosses.wyrm > 20 * 60000;
       if (reg.id === 'ember' && sr && ready && !sea.ships.some((s) => s.alive && s.type === 'wyrm') && dist2(sea.player.x, sea.player.z, sr.x, sr.z) < 420) { const pos = openWater(sr.x, sr.z, 120, 340); if (pos) { sea.spawn('wyrm', pos); game.toast('The water boils at Serpent Rock. The Ash Wyrm rises!', 'warn'); } }
       return;

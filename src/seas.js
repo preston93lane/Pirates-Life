@@ -49,7 +49,7 @@ export function createSeas(game) {
     // the far gates lead home, and are always open
     if (sea.region) { const G = sea.region; if (dist2(p.x, p.z, G.far.x, G.far.z) < 42 && !sea.passing) sea.pass(G, 'home'); }
   }
-  let smokeT = 0, eruptT = 25;
+  let smokeT = 0, eruptT = 90;
   function regionWeather(dt, p) {
     const fx = game.fx, c = game.camera.position, id = sea.region.id;
     if (id === 'frost') { for (let i = 0; i < 3; i++) fx.emit(c.x + rand(-40, 40), c.y + rand(4, 22), c.z + rand(-40, 40), { color: 0xf4f8fa, speed: 0, dir: [2, -5, 1], life: 3.5, size: 0.42, alpha: 0.85, spread: 0 }); return; }
@@ -60,7 +60,7 @@ export function createSeas(game) {
     smokeT -= dt; if (smokeT <= 0) { smokeT = 0.35; fx.smoke(v.x + rand(-3, 3), v.y + 2, v.z + rand(-3, 3), [0.05, 0.3, 0.02], 4); }
     eruptT -= dt;
     if (eruptT <= 0) { // an eruption: fire from the crater, lava bombs into the sea round you, and the sky turns to ash
-      eruptT = rand(80, 140);
+      eruptT = rand(240, 420);
       game.toast('Emberwake erupts! Lava falls from the sky. An ash storm is coming.', 'warn'); game.shake(1.2);
       for (let i = 0; i < 6; i++) { fx.fire(v.x + rand(-6, 6), v.y + rand(2, 10), v.z + rand(-6, 6), 8); fx.smoke(v.x, v.y + 4, v.z, [rand(-0.3, 0.3), 1, rand(-0.3, 0.3)], 12); }
       for (let i = 0; i < 6; i++) {
