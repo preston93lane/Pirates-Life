@@ -1,9 +1,9 @@
 // HUD and menus. Plain DOM over the canvas.
 import * as THREE from 'three';
-import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, CHARTS, HANDS, GRADES, STATIONS, AMMO_PACK, TREE, TREE_BRANCH, POINTS_PER_RANK, STORES } from './data.js';
+import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, CHARTS, GUILDS, HANDS, GRADES, STATIONS, AMMO_PACK, TREE, TREE_BRANCH, POINTS_PER_RANK, STORES } from './data.js';
 import { createMap } from './map.js';
 import { flagTexture } from './ship.js';
-import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave, makeHand, hireCost, addMorale, moraleWord, crewBonus, sk, feat, skillPoints, nodeRank, nodeOpen, storesFull, storesCost } from './state.js';
+import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave, makeHand, hireCost, addMorale, moraleWord, crewBonus, guildPrice, sk, feat, skillPoints, nodeRank, nodeOpen, storesFull, storesCost } from './state.js';
 import { heightAt, nearestIsland, refreshBase } from './world.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
@@ -165,7 +165,16 @@ export function createUI(game) {
       },
     },
     tavern: {
-      tabs: ['Jobs', 'Hands', 'Games', 'Bounties', 'Bar'],
+      tabs: ['Jobs', 'Hands', 'Games', 'Guilds', 'Bounties', 'Bar'],
+      Guilds(p) {
+        const s = S(), here = Object.entries(GUILDS).filter(([k, g]) => g.port === p.isl.id);
+        if (!here.length) return '<p>No guild meets in this port. The Merchant Guild keeps Saltmere, and the Bloodwater Brotherhood keeps Black Shoals.</p>';
+        return here.map(([k, g]) => {
+          const mine = s.guild === k, ok = s.rep[g.rep] >= g.need;
+          const act = mine ? btn('Leave the guild', 'leaveguild', k, 'bad') : s.guild ? '<span class="cost">Already in another guild</span>' : btn(`Join for ${g.dues} gold`, 'joinguild', k, 'go', !ok || s.gold < g.dues);
+          return row(g.name + (mine ? ' (member)' : ''), `${g.desc} ${ok ? '' : `Needs standing of ${g.need} or better (you have ${s.rep[g.rep]}).`}`, act);
+        }).join('');
+      },
       Games() {
         const s = S(), g = ui.g, die = (n) => `<span class="die">${'⚀⚁⚂⚃⚄⚅'[n - 1]}</span>`, FACE = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
         const stakes = (k) => [10, 50, 250].map((b) => btn(`${b} gold`, 'play', `${k}:${b}`, 'go', s.gold < b)).join(' ');
@@ -423,8 +432,10 @@ export function createUI(game) {
     abandon(id) { game.quests.abandon(id); },
     folkyes(id) { game.quests.folkAccept(id); audio.good(); ui.toast('Favour taken on. See Menu, Quests.', 'gold'); },
     folkclaim(id) { game.quests.folkClaim(id); },
+    joinguild(k) { const s = S(), g = GUILDS[k]; if (s.guild || s.rep[g.rep] < g.need || !pay(s, { gold: g.dues })) return; s.guild = k; game.sea.refreshStats(); audio.good(); ui.toast(`You are sworn into the ${g.name}.`, 'gold'); },
+    leaveguild(k) { const s = S(), g = GUILDS[k]; if (s.guild !== k) return; s.guild = null; addRep(s, g.rep, -15); ui.toast(`You leave the ${g.name}. They remember.`, 'warn'); },
     rum() { if (pay(S(), { gold: 30 })) { S().rum++; audio.coin(); } },
-    hire(i) { const s = S(), o = s.hire.list[+i]; if (!o || s.crew.length >= shipStats(s).berths || !pay(s, { gold: hireCost(o) })) return; s.hire.list.splice(+i, 1); o.ashore = (HANDS[o.role].land || o.role === 'deckhand') && s.crew.filter((h) => h.ashore).length < 3; s.crew.push(o); game.sea.refreshStats(); audio.good(); ui.toast(`${o.name} signs your articles.`, 'gold'); },
+    hire(i) { const s = S(), o = s.hire.list[+i]; if (!o || s.crew.length >= shipStats(s).berths || !pay(s, { gold: guildPrice(s, hireCost(o)) })) return; s.hire.list.splice(+i, 1); o.ashore = (HANDS[o.role].land || o.role === 'deckhand') && s.crew.filter((h) => h.ashore).length < 3; s.crew.push(o); game.sea.refreshStats(); audio.good(); ui.toast(`${o.name} signs your articles.`, 'gold'); },
     dismiss(id) { const s = S(), k = s.crew.findIndex((h) => h.id === id); if (k >= 0) { const h = s.crew.splice(k, 1)[0]; game.sea.refreshStats(); audio.ui(); ui.toast(`${h.name} is paid off.`, 'dim'); } },
     ashore(id) { const s = S(), h = s.crew.find((x) => x.id === id); if (h) { h.ashore = !h.ashore; audio.ui(); } },
     station(k) { game.orderStation(k); },
@@ -475,7 +486,7 @@ export function createUI(game) {
     jolly(arg) { const [k, v] = arg.split(':'); S().jolly[k] = v; if (S().flag === 'pirate') game.setFlag('pirate'); audio.ui(); },
     prize(how, p) { const sh = p.ship; ui.close(); game.prize(sh, how); },
     map() { ui.close(); ui.map.open(); },
-    repair() { const s = S(); if (pay(s, { gold: repairCost(s) })) { s.ship.hp = 1; game.sea.player.hp = game.sea.player.maxHp; audio.good(); } },
+    repair() { const s = S(); if (pay(s, { gold: guildPrice(s, repairCost(s)) })) { s.ship.hp = 1; game.sea.player.hp = game.sea.player.maxHp; audio.good(); } },
     upgrade(k) { const s = S(); if (s.ship.up[k] < MAX_UPGRADE && pay(s, upgradeCost(s, k))) { s.ship.up[k]++; game.sea.refreshStats(); audio.good(); } },
     buyship(k) { const s = S(); if (pay(s, { gold: SHIP_CLASSES[k].price })) { s.owned[k] = freshUps(); ACTIONS.switch(k); } },
     switch(k) { const s = S(); s.ship.cls = k; s.ship.up = s.owned[k]; s.ship.hp = 1; game.swapShip(); audio.good(); ui.toast(`You take command of the ${SHIP_CLASSES[k].name}.`, 'gold'); },

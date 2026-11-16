@@ -4,6 +4,7 @@ import { Ship, STYLES } from './ship.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES, STATIONS } from './data.js';
 import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale, feat, storesFull } from './state.js';
+import { GUILDS } from './data.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
 import { heightAt, nearestIsland } from './world.js';
@@ -95,15 +96,41 @@ export function createSea(game) {
     return sh.faction === 'navy' ? f === 'navy' || f === 'merchant' : sh.faction === 'pirate' ? f === 'bloodwater' : false;
   }
   function hostile(sh) {
+    if (sh.friend) return false; // your guild's ships are your friends
     return grudge(sh) && !disguised(sh);
+  }
+  // the guild you belong to: its ships fight for you, and come when a fight starts near you
+  function guildUpdate(dt) {
+    const g = game.save.guild, gf = g ? GUILDS[g].ship : null, p = sea.player;
+    for (const sh of sea.ships) sh.friend = !!gf && sh.faction === gf && !sh.provoked && !sh.surrendered && sh.alive;
+    if (!gf || !p.alive) return;
+    const foes = sea.ships.filter((s) => s.alive && !s.friend && hostile(s) && dist2(s.x, s.z, p.x, p.z) < 340);
+    for (const sh of sea.ships) {
+      if (!sh.friend) { sh.assist = null; continue; }
+      if (!foes.length) { sh.assist = null; continue; }
+      if (!sh.assist || !sh.assist.alive || sh.assistT <= 0) { sh.assist = foes.reduce((b, f) => (!b || dist2(sh.x, sh.z, f.x, f.z) < dist2(sh.x, sh.z, b.x, b.z) ? f : b), null); sh.assistT = 4; }
+      sh.assistT -= dt;
+    }
   }
   function steer(sh, dt) {
     const p = sea.player, d = dist2(sh.x, sh.z, p.x, p.z), toP = Math.atan2(p.x - sh.x, p.z - sh.z);
     let want = sh.heading, sail = 0.55;
     if (sh.surrendered) { sh.sail = 0; sh.rudder = 0; return; }
     if (!sh.saw && d < 115 && grudge(sh) && disguised(sh)) { sh.sus = (sh.sus || 0) + dt * (d < 60 ? 0.42 : 0.15); if (sh.sus > 1) { sh.saw = true; game.toast(`The ${sh.name} has seen through your false colours!`, 'warn'); } }
+    if (sh.friend && sh.assist && sh.assist.alive) { // come to the aid of your captain: close on the nearest foe and fire
+      const f = sh.assist, df = dist2(sh.x, sh.z, f.x, f.z), tf = Math.atan2(f.x - sh.x, f.z - sh.z);
+      sh.sail = 0.8; sh.rudder = clamp(-angleDiff(sh.heading, tf) * 1.6, -1, 1); sh.heading = sh.heading; sh.sail = df < 70 ? 0.5 : 0.85; want = tf; sail = df < 70 ? 0.5 : 0.85;
+      const b = sh.bearing(f.x, f.z); if (b.off < 0.5 && b.dist < 140 && sh.reload[b.side] <= 0) fire(sh, b.side, f);
+      sh.wantHeading = want; sh.sailWant = sail; return;
+    }
     const aggro = hostile(sh) && p.alive && game.mode !== 'land' && d < (sh.hunter ? 3000 : sh.provoked ? 520 : 330);
-    if (sh.released || (sh.def.flee && sh.provoked && d < 420)) { want = toP + Math.PI; sail = 1; if (sh.released && d > 520) sh.gone = true; }
+    const assisting = sh.friend && sh.assist && sh.assist.alive;
+    if (assisting) { // come to the aid of your captain: close on the nearest foe and fire on it
+      const f = sh.assist, df = dist2(sh.x, sh.z, f.x, f.z), tf = Math.atan2(f.x - sh.x, f.z - sh.z);
+      want = tf; sail = df < 70 ? 0.5 : 0.85;
+      const b = sh.bearing(f.x, f.z); if (b.off < 0.5 && b.dist < 140 && sh.reload[b.side] <= 0) fire(sh, b.side, f);
+    }
+    else if (sh.released || (sh.def.flee && sh.provoked && d < 420)) { want = toP + Math.PI; sail = 1; if (sh.released && d > 520) sh.gone = true; }
     else if (aggro) {
       if (d > 105) { want = toP; sail = 1; }
       else {
@@ -195,6 +222,7 @@ export function createSea(game) {
     if (!sh.alive) return;
     const mine = by && by.isPlayer && !sh.isPlayer;
     if (mine && sh.released) return; // a ship you let go is under your word: you cannot rob her twice
+    if (mine && sh.friend && game.save.guild) { const g = GUILDS[game.save.guild]; game.save.guild = null; addRep(game.save, g.rep, -30); game.toast(`You have fired on your own. The ${g.name} has cast you out.`, 'warn'); sh.friend = false; }
     if (kind === 'grapple') { if (mine) { sh.provoked = true; hook(sh); } return; }
     if (kind === 'chain') { dmg *= 0.25; sh.sailHp = Math.max(sh.isPlayer ? 0.4 : 0.2, sh.sailHp - 0.1); if (sh.isPlayer) game.tip('chain', 'Chain shot has cut your rigging. You are slower until it mends itself.'); }
     if (kind === 'fire') { dmg *= 0.5; sh.burn = Math.min(sh.isPlayer ? 7 : 14, sh.burn + 4.5); }
@@ -589,6 +617,7 @@ export function createSea(game) {
   sea.update = (dt, active) => {
     const p = sea.player, time = game.time;
     if (active && p.alive) control(dt);
+    if (active) guildUpdate(dt);
     for (const s of sea.ships) { if (s.alive && !s.frozen) { if (active) steer(s, dt); else { s.sail = 0; s.rudder = 0; } } s.update(dt, time); }
     p.update(dt, time);
     if (sea.stn) { sea.stn.t -= dt; if (sea.stn.t <= 0) { game.save.station = sea.stn.k; sea.stn = null; sea.refreshStats(); audio.good(); game.toast(`"${STATIONS[game.save.station].name}. Ready, Captain."`, 'gold'); } }

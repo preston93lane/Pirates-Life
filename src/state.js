@@ -18,6 +18,7 @@ export function crewBonus(s) {
 }
 const nr = (s, id) => (s.tree && s.tree[id]) || 0;
 export const nodeRank = nr;
+export const guildPrice = (s, c) => (s.guild ? Math.round(c * 0.9) : c);
 export const sk = (s, id) => { let n = 0; for (const k in TREE) { const g = TREE[k].gives; if (g && g[id]) n += g[id] * nr(s, k); } return n; };
 export const feat = (s, id) => { for (const k in TREE) if (TREE[k].feat === id && nr(s, k) > 0) return true; return false; };
 export const skillPoints = (s) => { let spent = 0; for (const k in TREE) for (let i = 0; i < nr(s, k); i++) spent += TREE[k].cost[i]; return (s.level - 1) * POINTS_PER_RANK - spent; };
@@ -41,7 +42,7 @@ export function newSave() {
     ship: { cls: 'cutter', up: null, hp: 1, sail: 'bone' },
     owned: { cutter: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
-    tree: {}, charts: {}, folk: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
+    tree: {}, charts: {}, guild: null, folk: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
     crew: null, morale: 70, station: 'even', atWill: false, hire: null,
     bombs: 2, bless: 0, caves: {}, music: true, daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,

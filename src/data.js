@@ -328,3 +328,9 @@ export const CHARTS = {
   wolf: { name: 'The Wolf', desc: 'Pale stars that only show after midnight.' },
 };
 export const CHART_CHANCE = 0.03; // a hidden chest holds a chart this often, until you have them all
+
+// ----- guilds: join at a port, and the ships of your guild stop attacking you and come to your aid -----
+export const GUILDS = {
+  merchant: { name: 'Merchant Guild', port: 'saltmere', ship: 'merchant', rep: 'guild', need: 30, dues: 300, desc: 'Saltmere\'s traders. Their sloops fight beside you, and you buy hires and repairs 10% cheaper.' },
+  brotherhood: { name: 'Bloodwater Brotherhood', port: 'shoals', ship: 'pirate', rep: 'blood', need: -10, dues: 500, desc: 'The raiding crews of the Bloodwater gang. Their ships fight beside you, and you buy hires and repairs 10% cheaper.' },
+};
