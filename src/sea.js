@@ -4,7 +4,7 @@ import { Ship, STYLES } from './ship.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, LIM, GOODS, AMMO, BOUNTIES, STATIONS } from './data.js';
 import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale, feat, storesFull } from './state.js';
-import { GUILDS } from './data.js';
+import { GUILDS, ISLAND as ISLAND_BY } from './data.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
 void wrapAngle;
 import { heightAt, nearestIsland } from './world.js';
@@ -46,7 +46,7 @@ export function createSea(game) {
   function openWater(cx, cz, rMin, rMax) {
     for (let i = 0; i < 40; i++) {
       const a = rand(TAU), d = rand(rMin, rMax), x = cx + Math.sin(a) * d, z = cz + Math.cos(a) * d;
-      if (Math.hypot(x, z) > WORLD_R - 150 || heightAt(x, z) > -12 || nearestIsland(x, z).d < 70) continue;
+      if (Math.hypot(x, z) > LIM.r - 150 || heightAt(x, z) > -12 || nearestIsland(x, z).d < 70) continue;
       return { x, z };
     }
     return null;
@@ -68,6 +68,12 @@ export function createSea(game) {
     if (count('pirate') < (lv >= 5 ? 3 : 2)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
     // fleets: from rank 3 a pirate gang can sail as three, and once you're wanted the navy patrols in pairs
     if (lv >= 3 && count('pirate') < 3 && Math.random() < 0.012) { const pos = openWater(sea.player.x, sea.player.z, 420, 640); if (pos) { sea.spawn('pirate2', pos); sea.spawn('pirate', { x: pos.x + 22, z: pos.z + 10 }); sea.spawn('pirate', { x: pos.x - 18, z: pos.z + 20 }); game.toast('A pirate fleet of three is out on the water.', 'warn'); } }
+    // the Ember Sea: at least two raiders patrol it, and the Ash Wyrm rises near Serpent Rock
+    if (game.seas && game.seas.region && game.seas.region.id === 'ember') {
+      if (count('ghost') < 4) { const pos = openWater(sea.player.x, sea.player.z, 260, 620); if (pos) sea.spawn('ember', pos); }
+      const sr = ISLAND_BY.ember_b, ready = !game.save.bosses.wyrm || Date.now() - game.save.bosses.wyrm > 20 * 60000;
+      if (sr && ready && !sea.ships.some((s) => s.alive && s.type === 'wyrm') && dist2(sea.player.x, sea.player.z, sr.x, sr.z) < 420) { const pos = openWater(sr.x, sr.z, 120, 340); if (pos) { sea.spawn('wyrm', pos); game.toast('The water boils at Serpent Rock. The Ash Wyrm rises!', 'warn'); } }
+    }
     if (game.save.rep.navy <= -20 && count('navy') < 2 && Math.random() < 0.01) { const pos = openWater(sea.player.x, sea.player.z, 420, 640); if (pos) { sea.spawn('navy', pos); sea.spawn('navy', { x: pos.x + 20, z: pos.z - 16 }); game.toast('A navy patrol of two has your scent.', 'warn'); } }
     if (count('navy') < (game.save.rep.navy <= -20 ? 2 : 1)) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
     if (game.save.rep.navy <= -60 && !sea.ships.some((s) => s.alive && s.hunter)) { sea.hunterT = (sea.hunterT ?? 20) - 2.5; if (sea.hunterT <= 0) { const pos = openWater(sea.player.x, sea.player.z, 460, 680); if (pos && sea.spawn('hunter', pos)) { sea.hunterT = 100; game.toast('A navy hunter has your scent. She outguns you.', 'warn'); } } }
@@ -248,7 +254,7 @@ export function createSea(game) {
     if (sea.target === sh) sea.target = null;
     if (by && by.isPlayer) { // sinking pays the most infamy and the least loot
       dropLoot(sh, 0.35); game.reward({ xp: sea.infamy(sh.def.xp * 1.5) }, `${sh.name} sunk`); game.save.stats.sunk++; addMorale(game.save, 3); sea.refreshStats(); sea.offend(sh, 'sink');
-      game.emit('sink', { faction: sh.faction, type: sh.type }); if (sh.def.boss) game.emit('boss', { boss: sh.type });
+      game.emit('sink', { faction: sh.faction, type: sh.type }); if (sh.def.boss) { game.emit('boss', { boss: sh.type }); game.save.bosses[sh.type] = Date.now(); game.reward({ gold: 1000, xp: 500, iron: 60 }, sh.name + ' is sunk'); }
     }
   }
   sea.sink = sink;

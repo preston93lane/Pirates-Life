@@ -169,7 +169,7 @@ function plan(isl) {
   }
   // wild hostiles roam every island away from the ports, matched to its biome. Placed last so nothing else moves.
   if (isl.kind !== 'town' && isl.kind !== 'hideout' && !isl.navy) {
-    const pick = isl.biome === 'jungle' ? ['brigand', 'brigand', 'marksman'] : isl.biome === 'dry' ? ['crab', 'crab', 'brigand'] : ['brigand', 'marksman', 'brigand'];
+    const pick = isl.region === 'ember' ? ['cultist', 'cultist', 'marksman'] : isl.biome === 'jungle' ? ['brigand', 'brigand', 'marksman'] : isl.biome === 'dry' ? ['crab', 'crab', 'brigand'] : ['brigand', 'marksman', 'brigand'];
     const n = Math.max(2, Math.round(isl.r / 26));
     for (let i = 0; i < n; i++) { const p = spot(1.2, isl.h * 1.2, 16); isl.spawns.push({ foe: pick[i % pick.length], x: p.x, z: p.z, wild: true }); }
   }

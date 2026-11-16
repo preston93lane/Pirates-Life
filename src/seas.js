@@ -57,5 +57,5 @@ export function createSeas(game) {
       setTimeout(() => { sea.passing = false; }, 2500);
     });
   };
-  return { update, gates };
+  return { update, gates, get region() { return sea.region; } };
 }

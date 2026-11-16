@@ -24,6 +24,7 @@ const LOOKS = {
   wright: { coat: null, shirt: 0x8c7a5a, pants: 0x4a3b2c, boots: 0x1c1713, hat: 'wide', hatC: 0x6e5a40, apron: 0x5c4733 },
   smith: { coat: null, shirt: null, pants: 0x2f2a26, boots: 0x16120f, hat: 'none', hair: 0x1a1512, bulk: 1.15, apron: 0x3a2e24 },
   merchant: { coat: 0x2f5d63, shirt: 0xc4b99d, pants: 0x2a2622, boots: 0x16120f, hat: 'wide', hatC: 0x1c1a19, tails: true, sash: 0xb58a2e },
+  cultist: { coat: 0x5a1a14, shirt: 0x2a1410, pants: 0x1c1212, boots: 0x0f0a0a, hat: 'rag', hatC: 0x3a1410, sash: 0xd9702a, weapon: 'cutlass', blade: 0xb0502a },
   crab: { crab: true },
 };
 

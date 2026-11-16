@@ -114,6 +114,7 @@ export const FOES = {
   warden: { name: 'Bone Warden', hp: 300, dmg: 22, speed: 3.2, tele: 0.9, look: 'skeleton', heavy: true, scale: 1.6, mini: true, xp: 150, gold: [120, 220] },
   chief: { name: 'Bandit Chief', hp: 260, dmg: 18, speed: 4.0, tele: 0.5, look: 'captain', scale: 1.2, mini: true, xp: 130, gold: [120, 200] },
   matriarch: { name: 'Crab Matriarch', hp: 280, dmg: 18, speed: 3.8, tele: 0.7, look: 'crab', heavy: true, scale: 2, mini: true, xp: 140, gold: [80, 160] },
+  cultist: { name: 'Ash Cultist', hp: 46, dmg: 13, speed: 3.9, tele: 0.5, look: 'cultist', xp: 18, gold: [8, 22] },
   crew: { name: 'Crewmate', hp: 70, dmg: 11, speed: 4.0, tele: 0.5, look: 'crew' },
   h_bravo: { name: 'Swordmaster', hp: 95, dmg: 21, speed: 4.8, tele: 0.4, look: 'bravo' },
   h_musket: { name: 'Musketeer', hp: 60, dmg: 19, speed: 4.0, tele: 0.8, look: 'musketeer', ranged: true },
@@ -347,3 +348,7 @@ export const GUILDS = {
   merchant: { name: 'Merchant Guild', port: 'saltmere', ship: 'merchant', rep: 'guild', need: 30, dues: 300, desc: 'Saltmere\'s traders. Their sloops fight beside you, and you buy hires and repairs 10% cheaper.' },
   brotherhood: { name: 'Bloodwater Brotherhood', port: 'shoals', ship: 'pirate', rep: 'blood', need: -10, dues: 500, desc: 'The raiding crews of the Bloodwater gang. Their ships fight beside you, and you buy hires and repairs 10% cheaper.' },
 };
+
+// ----- the Ember Sea: its own ships and its boss -----
+SEA_FOES.ember = { name: 'Ember Raider', cls: 'brig', faction: 'ghost', hp: 240, guns: 5, dmg: 9, crew: ['cultist', 'cultist', 'cultist', 'marksman', 'captain'], gold: [220, 340], goods: 3, xp: 150 };
+SEA_FOES.wyrm = { name: 'The Ash Wyrm', cls: 'galleon', faction: 'ghost', hp: 900, guns: 8, dmg: 12, crew: ['cultist', 'cultist', 'cultist', 'brute', 'captain'], gold: [1200, 1600], goods: 0, xp: 600, boss: true };
