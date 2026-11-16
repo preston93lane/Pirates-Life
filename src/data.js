@@ -1,6 +1,7 @@
 // All tunable game content lives here: the archipelago, ships, weapons, goods, enemies, story.
 
 export const WORLD_R = 1450;
+export const LIM = { r: 1450 }; // how far the charts reach: wider once you pass through a gate
 
 // kind: town | hideout | fort | ruins | crab | islet.   land: compass angle (radians) of the landing beach.
 export const ISLANDS = [
@@ -13,6 +14,18 @@ export const ISLANDS = [
   { cave: true, id: 'crab', name: 'Crabclaw Key', x: -230, z: 900, r: 150, h: 14, seed: 71, kind: 'crab', land: 5.2, blurb: 'Crab nests, and something bigger.' },
   { cave: true, id: 'blood', name: 'Bloodwater Hold', x: 780, z: 640, r: 150, h: 18, seed: 83, kind: 'fort', land: 3.9, blurb: 'Fort of the Bloodwater gang. Their vault is full.' },
   { cave: true, id: 'tooth', name: "Widow's Tooth", x: -1020, z: 170, r: 66, h: 16, seed: 97, kind: 'islet', land: 0.2, blurb: 'A lonely spike of rock.' },
+  // ----- the Ember Sea: jungle, ash and ruins, beyond the charts (opened by The Hunter) -----
+  { jungle: true, id: 'ember_a', name: 'Ash Temple', x: -2400, z: 1700, r: 150, h: 30, seed: 211, kind: 'ruins', land: 0.6, blurb: 'A sunken temple in the ash. The dead keep watch.', region: 'ember' },
+  { jungle: true, id: 'ember_b', name: 'Serpent Rock', x: -2050, z: 2050, r: 90, h: 16, seed: 223, kind: 'islet', land: 2.2, blurb: 'A rock of coiled roots and bones.', region: 'ember' },
+  { cave: true, jungle: true, id: 'ember_c', name: 'Emberwake Isle', x: -2750, z: 1250, r: 170, h: 34, seed: 233, kind: 'ruins', land: 4.1, blurb: 'Black sand and warm springs.', region: 'ember' },
+  { jungle: true, id: 'ember_d', name: 'Idol Reef', x: -2150, z: 1350, r: 110, h: 18, seed: 241, kind: 'crab', land: 5.6, blurb: 'Crab nests in the reeds.', region: 'ember' },
+  { jungle: true, id: 'ember_e', name: 'Ashfall Key', x: -2900, z: 2100, r: 95, h: 14, seed: 251, kind: 'islet', land: 1.0, blurb: 'A lonely key under falling ash.', region: 'ember' },
+  // ----- the Frost Sea: cold, stormy and dry, beyond the charts (opened by The Wolf) -----
+  { id: 'frost_a', name: 'Stormhold', x: 2500, z: 2300, r: 160, h: 26, seed: 311, kind: 'ruins', land: 3.4, blurb: 'A ruined watch tower on a stormy cliff.', region: 'frost' },
+  { id: 'frost_b', name: 'Wolfmere', x: 2150, z: 1650, r: 110, h: 18, seed: 323, kind: 'crab', land: 1.8, blurb: 'Grey rocks where wolves den.', region: 'frost' },
+  { cave: true, id: 'frost_c', name: 'Icebreak Rock', x: 2900, z: 1800, r: 90, h: 14, seed: 331, kind: 'islet', land: 4.7, blurb: 'A rock the storms break against.', region: 'frost' },
+  { cave: true, id: 'frost_d', name: 'Gallows Cay', x: 2700, z: 1100, r: 130, h: 22, seed: 341, kind: 'ruins', land: 2.6, blurb: 'Gibbets on a bare cay.', region: 'frost' },
+  { id: 'frost_e', name: 'Frostward', x: 3150, z: 2650, r: 100, h: 16, seed: 353, kind: 'islet', land: 0.9, blurb: 'A lonely island the cold has made white.', region: 'frost' },
 ];
 export const ISLAND = Object.fromEntries(ISLANDS.map((i) => [i.id, i]));
 

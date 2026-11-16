@@ -4,7 +4,7 @@ import { clamp, damp, smooth, waveHeight, wrapAngle } from './util.js';
 import { Mesher, box, cyl, cone, soup, paint, boxUV, hullMat } from './geo.js';
 import { heightAt } from './world.js';
 import { staticFigure } from './character.js';
-import { WORLD_R } from './data.js';
+import { LIM } from './data.js';
 
 export const STYLES = {
   player: { hull: 0x40301f, trim: 0x9a772f, sail: 0xd9cdb0, flag: 0x121212 },
@@ -190,7 +190,7 @@ export class Ship {
       this.aground = false;
       if (heightAt(bx, bz) > -1.7) { this.aground = true; this.speed = Math.min(this.speed, 0) - 1.5; nx = this.x - this.fx * 2.5 * dt; nz = this.z - this.fz * 2.5 * dt; }
       else if (heightAt(nx, nz) > -1.7) { this.aground = true; this.speed *= 0.5; }
-      const d = Math.hypot(nx, nz); if (d > WORLD_R) { nx *= WORLD_R / d; nz *= WORLD_R / d; this.edge = true; } else this.edge = false;
+      const d = Math.hypot(nx, nz); if (d > LIM.r) { nx *= LIM.r / d; nz *= LIM.r / d; this.edge = true; } else this.edge = false;
       this.x = nx; this.z = nz;
     } else this.speed = 0;
     const hb = waveHeight(this.x + this.fx * len * 0.4, this.z + this.fz * len * 0.4, time), hs = waveHeight(this.x - this.fx * len * 0.4, this.z - this.fz * len * 0.4, time);

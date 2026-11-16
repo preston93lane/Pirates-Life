@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Ship, STYLES } from './ship.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, GOODS, AMMO, BOUNTIES, STATIONS } from './data.js';
+import { SHIP_CLASSES, SEA_FOES, ISLANDS, ZONES, WORLD_R, LIM, GOODS, AMMO, BOUNTIES, STATIONS } from './data.js';
 import { shipStats, SAIL_COLORS, cargoUsed, grant, addRep, addMorale, feat, storesFull } from './state.js';
 import { GUILDS } from './data.js';
 import { clamp, angleDiff, wrapAngle, rand, pick, dist2, waveHeight, TAU, damp, smooth } from './util.js';
@@ -149,7 +149,7 @@ export function createSea(game) {
     // keep off the rocks and inside the chart
     const probe = (ang, dist) => heightAt(sh.x + Math.sin(ang) * dist, sh.z + Math.cos(ang) * dist) > -3.5;
     if (probe(sh.heading, 45) || probe(sh.heading, 90) || sh.aground) { const l = probe(sh.heading + 0.8, 80), r = probe(sh.heading - 0.8, 80); want = sh.heading + (l && !r ? -1.4 : 1.4); sail = Math.min(sail, 0.5); if (sh.aground) sh.way = null; }
-    if (Math.hypot(sh.x, sh.z) > WORLD_R - 140) want = Math.atan2(-sh.x, -sh.z);
+    if (Math.hypot(sh.x, sh.z) > LIM.r - 140) want = Math.atan2(-sh.x, -sh.z);
     sh.rudder = clamp(-angleDiff(sh.heading, want) * 2.2, -1, 1); sh.sail = sail;
   }
 
