@@ -5,6 +5,9 @@ import { ISLANDS, WORLD_R, BUILDINGS } from './data.js';
 import { fbm, noise, smooth, lerp, clamp, rng, WAVES, TAU, SEA } from './util.js';
 import { Mesher, Kit, MAT, box, cyl, cone, ball, groundMat, setGlow } from './geo.js';
 import { staticFigure } from './character.js';
+import { loadGltf } from './models.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+const NAT = 'medieval/nature/';
 
 export const PAL = {
   fog: 0xb6b09d, zenith: 0x3a5d76, horizon: 0xcdbd9e, sun: 0xffdfae, deep: 0x0c2f3f, shallow: 0x2f8f8c, abyss: 0x0a2733,
@@ -234,6 +237,20 @@ function deadTreeGeo() { const m = new Mesher(), c = 0x8a8072; m.add(cyl(0.1, 0.
 function rockGeo() { const m = new Mesher(); m.add(new THREE.DodecahedronGeometry(1, 0), 0x77706a, [0, 0.3, 0], [0.4, 0.2, 0.1], [1, 0.7, 0.85], 0.1); return m.build(); }
 function bushGeo() { const m = new Mesher(); m.add(ball(1), 0x4a6232, [0, 0.45, 0], [0, 0, 0], [1, 0.6, 1], 0.14); m.add(ball(0.7), 0x3c5530, [0.7, 0.35, 0.3], [1, 1, 0], [1, 0.6, 1], 0.14); return m.build(); }
 
+// Swap a scatter's procedural shape for a real model, keeping its size and every position. Used once the file has loaded.
+function dressWith(mesh, procGeo, file) {
+  procGeo.computeBoundingBox(); const pb = procGeo.boundingBox, H = pb.max.y - pb.min.y;
+  loadGltf(file).then((g) => {
+    if (!g) return;
+    const parts = []; let mat = null;
+    g.scene.updateMatrixWorld(true);
+    g.scene.traverse((o) => { if (o.isMesh) { const x = o.geometry.clone().applyMatrix4(o.matrixWorld); for (const k of Object.keys(x.attributes)) if (!['position', 'normal', 'uv'].includes(k)) x.deleteAttribute(k); parts.push(x.toNonIndexed()); mat = mat || o.material; } });
+    if (!parts.length) return;
+    const merged = mergeGeometries(parts); merged.computeBoundingBox(); const bb = merged.boundingBox, s = H / Math.max(0.01, bb.max.y - bb.min.y);
+    merged.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); merged.scale(s, s, s); merged.computeVertexNormals();
+    const old = mesh.geometry; mesh.geometry = merged; mesh.material = mat; old.dispose();
+  });
+}
 function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
   const mesh = new THREE.InstancedMesh(geo, MAT, count), d = new THREE.Object3D(), R = isl.rand;
   let n = 0;
@@ -248,6 +265,7 @@ function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
   }
   mesh.count = n; mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
   group.add(mesh);
+  return mesh;
 }
 
 // ---------- structures ----------
@@ -610,13 +628,13 @@ export function createWorld(scene) {
     const dense = isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1;
     g.add(m.mesh());
     isl.blocks = isl.colliders.filter((c) => c.r > 1.4).map((c) => ({ x: c.x, z: c.z, r: c.r }));
-    scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.62, true);
-    scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 0.7, true); // crags up high
-    scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35);
-    if (isl.r > 100) scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5);
-    scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0);
+    dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.62, true), rock, NAT + 'rock_single_B.gltf');
+    dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 0.7, true), rock, NAT + 'rock_single_D.gltf'); // crags up high
+    dressWith(scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35), palm, NAT + 'tree_single_A.gltf');
+    if (isl.r > 100) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
+    dressWith(scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0), bush, NAT + 'trees_A_small.gltf');
     scatter(g, isl, fern, Math.round(isl.r * 0.28 * dense), 1.8, 40, 0.8, 1.5, 0);
-    if (isl.jungle) scatter(g, isl, jtree, Math.round(isl.r * 0.42), 4, isl.h * 1.4, 0.8, 1.5, 0.5);
+    if (isl.jungle) dressWith(scatter(g, isl, jtree, Math.round(isl.r * 0.42), 4, isl.h * 1.4, 0.8, 1.5, 0.5), jtree, NAT + 'trees_B_large.gltf');
     if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') scatter(g, isl, dead, 8, 1.5, 40, 0.8, 1.4, 0.3);
     if (isl.caveAt) { const c = isl.caveAt, cy = heightAt(c.x, c.z), k = new Kit(KINDS); // cave mouth
       for (const [dx, sc] of [[-2.6, 2.6], [2.6, 2.8], [0, 2.2]]) k.add(new THREE.DodecahedronGeometry(1, 0), PAL.darkRock, [c.x + dx, cy + (dx ? 1.6 : 4.4), c.z], [dx, dx * 2, 0.3], [sc, dx ? sc * 1.3 : 1.4, sc], 0.1, 'plain');
