@@ -267,24 +267,37 @@ function dressWith(mesh, procGeo, file) {
     const merged = mergeGeometries(parts); merged.computeBoundingBox(); const bb = merged.boundingBox, s = H / Math.max(0.01, bb.max.y - bb.min.y);
     merged.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); merged.scale(s, s, s); merged.computeVertexNormals();
     const old = mesh.geometry; mesh.geometry = merged; mesh.material = mat; old.dispose();
+    const e = DECOR.find((x) => x.mesh === mesh); if (e) e.aA = setupAlpha(mesh, e.n);
   });
 }
 const SCENERY = []; // big placed models (hills, mountains) that can step aside from the camera
 const DECOR = []; // scattered instances per island, so trees can clear away from the camera
+// Per-tree opacity: each scattered mesh gets its own alpha attribute, read by a small patch to its material.
+function setupAlpha(mesh, n) {
+  const geo = mesh.geometry.clone(), aA = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n)).fill(1), 1);
+  geo.setAttribute('aAlpha', aA); mesh.geometry = geo;
+  const mat = mesh.material.clone(); mat.transparent = true; mat.depthWrite = true;
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aAlpha; varying float vAlpha;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvAlpha = aAlpha;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vAlpha;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vAlpha;');
+  };
+  mesh.material = mat;
+  return aA;
+}
+// Trees that stand between you and the camera go to 0% opacity; trees around you, within 150% of the camera distance, go to 15%.
 export function coverView(isl, px, pz, cx, cz) {
-  for (const o of SCENERY) { if (o.isl !== isl || !o.obj) continue; const d = Math.hypot(o.obj.position.x - cx, o.obj.position.z - cz); o.obj.visible = d > o.r; }
+  const D = Math.hypot(cx - px, cz - pz), R = D * 1.5, L = D || 1, ux = (cx - px) / L, uz = (cz - pz) / L;
   for (const e of DECOR) {
     if (e.isl !== isl) continue;
-    const { mesh, base, n } = e, arr = mesh.instanceMatrix.array;
-    const dx = cx - px, dz = cz - pz, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L; let changed = false;
+    const { n, base, aA } = e, arr = aA.array; let changed = false;
     for (let i = 0; i < n; i++) {
-      const o = i * 16, x = base[o + 12], z = base[o + 14], rx = x - px, rz = z - pz;
+      const o = i * 16, rx = base[o + 12] - px, rz = base[o + 14] - pz, dist = Math.hypot(rx, rz);
       const along = rx * ux + rz * uz, across = Math.abs(rx * uz - rz * ux);
-      const hide = (along > -2.2 && along < L + 1 && across < 2.6 && Math.hypot(rx, rz) < 9) || Math.hypot(x - cx, z - cz) < 9; // the line to you, and whatever stands round the camera
-      const s = hide ? 0 : 1;
-      if (e.state[i] !== s) { e.state[i] = s; arr[o] = base[o] * s; arr[o + 5] = base[o + 5] * s; arr[o + 10] = base[o + 10] * s; changed = true; }
+      const between = along > 0 && along < L && across < 3.2;
+      const a = between ? 0 : dist < R ? 0.15 : 1;
+      if (arr[i] !== a) { arr[i] = a; changed = true; }
     }
-    if (changed) mesh.instanceMatrix.needsUpdate = true;
+    if (changed) aA.needsUpdate = true;
   }
 }
 function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
@@ -301,7 +314,7 @@ function scatter(group, isl, geo, count, minH, maxH, sMin, sMax, colR, block) {
   }
   mesh.count = n; mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
   group.add(mesh);
-  if (n) DECOR.push({ mesh, isl, n, base: Float32Array.from(mesh.instanceMatrix.array.subarray(0, n * 16)), state: new Uint8Array(n).fill(1) });
+  if (n) DECOR.push({ mesh, isl, n, base: Float32Array.from(mesh.instanceMatrix.array.subarray(0, n * 16)), aA: setupAlpha(mesh, n) });
   return mesh;
 }
 
