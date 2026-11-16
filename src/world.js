@@ -580,7 +580,7 @@ export function refreshBase(world, save) {
     all.origin = new THREE.Matrix4().makeRotationY(p.face + Math.PI).setPosition(p.x, y - 0.1, p.z);
     if (lvl) { // the built, real model; the hand-made one stays as a fallback
       isl.colliders.push({ x: p.x, z: p.z, r: 3.4, base: true });
-      placeModel(world.scene, 'medieval/buildings/green/' + BASE_MODEL[p.id] + '.gltf', p.x, y - 0.1, p.z, p.face + Math.PI, 1.05 + 0.07 * lvl).then((m) => { if (m && world.baseToken === token) world.baseModels.push(m); else if (m) world.scene.remove(m); });
+      placeModel(world.scene, 'medieval/buildings/green/' + BASE_MODEL[p.id] + '.gltf', p.x, y - 0.1, p.z, p.face + Math.PI, 1, 9 + 1.5 * lvl).then((m) => { if (m && world.baseToken === token) world.baseModels.push(m); else if (m) world.scene.remove(m); });
       if (!BASE_MODEL[p.id]) BUILD_DRAW[p.id](all, lvl);
     }
     else { for (const [x, z] of [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]]) all.add(cyl(0.08, 0.1, 1.1, 4), PAL.timber, [x, 0.55, z]); all.add(box(1.3, 0.8, 0.1), PAL.plank, [0, 1.5, 3.4]); all.add(cyl(0.07, 0.07, 1.8, 4), PAL.timber, [0, 0.9, 3.4]); }

@@ -23,10 +23,11 @@ export function loadModel(path) {
   return loadGltf(path).then((g) => (g ? cloneRig(g.scene) : null));
 }
 
-// Put a model on the ground at (x, y, z), turned by rot (radians) and scaled by s.
-export async function placeModel(parent, path, x, y, z, rot = 0, s = 1) {
+// Put a model on the ground at (x, y, z), turned by rot (radians). Scale it by s, or to a height of targetH units.
+export async function placeModel(parent, path, x, y, z, rot = 0, s = 1, targetH = 0) {
   const m = await loadModel(path);
   if (!m) return null;
+  if (targetH) { const box = new THREE.Box3().setFromObject(m), h = Math.max(0.01, box.max.y - box.min.y); s = targetH / h; }
   m.position.set(x, y, z); m.rotation.y = rot; m.scale.setScalar(s);
   parent.add(m);
   return m;
