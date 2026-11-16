@@ -8,7 +8,6 @@ import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE, TAV } from
 import { input } from './input.js';
 import { audio } from './audio.js';
 import { placeModel } from './models.js';
-import { riggedActor, riggedStatic } from './rigged.js';
 
 const ATK_DUR = [0.4, 0.4, 0.54], HIT_U = 0.42, REACH = 2.5;
 const BLADES = [0x8c8a84, 0xb9bdc1, 0xd8dcdf, 0x6f7f95, 0x9fd0e8];
@@ -25,7 +24,7 @@ export function createLand(game) {
   const land = { pois: [], bombs: [], cave: null, actors: [], player: null, isl: null, kind: null, focus: null, chests: [], mounds: [], boarding: null, tokens: 0 };
 
   function makeActor(key, x, z, team, lvl = 1) {
-    const def = FOES[key], ch = riggedActor(def.look), sc = def.scale || 1;
+    const def = FOES[key], ch = buildCharacter(def.look), sc = def.scale || 1;
     ch.root.scale.setScalar(sc);
     const a = { key, def, ch, x, z, y: groundAt(x, z), face: rand(TAU), team, hp: Math.round(def.hp * lvl), maxHp: Math.round(def.hp * lvl), dmg: def.dmg * lvl, state: 'idle', t: 0, cd: rand(0.3, 1.4), alive: true, radius: 0.42 * (def.look === 'crab' ? 1.5 : 1) * sc, kx: 0, kz: 0, home: { x, z }, strafe: Math.random() < 0.5 ? 1 : -1 };
     const h = ch.height + 0.35;
@@ -188,7 +187,7 @@ export function createLand(game) {
     clear(); land.isl = isl; land.cave = { isl, tavern: true }; game.world.cave = true; game.world.tavern = true;
     spawnPlayer(c.x, c.z - c.hl + 2, 0); game.cam.yaw = 0; game.cam.pitch = 0.75;
     land.tav = []; land.roomCols = [];
-    const fig = (look, x, z, rot, r = 0.5) => { const m = riggedStatic(look); m.position.set(c.x + x, c.top, c.z + z); m.rotation.y = rot; scene.add(m); land.props.push(m); land.roomCols.push({ x: c.x + x, z: c.z + z, r }); };
+    const fig = (look, x, z, rot, r = 0.5) => { const m = staticFigure(look); m.position.set(c.x + x, c.top, c.z + z); m.rotation.y = rot; scene.add(m); land.props.push(m); land.roomCols.push({ x: c.x + x, z: c.z + z, r }); };
     const spot = (x, z, r, label, sub, icon, run) => land.tav.push({ x: c.x + x, z: c.z + z, r, label, sub, icon, run });
     for (let x = -4.6; x <= 4.6; x += 1.15) land.roomCols.push({ x: c.x + x, z: c.z + 6.4, r: 0.7 });
     land.roomCols.push({ x: c.x - c.hw + 0.6, z: c.z + 5.6, r: 1.4 });
