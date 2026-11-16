@@ -615,6 +615,7 @@ export function createLand(game) {
     if (land.boarding && land.boarding.won) { land.boarding.t += dt; if (land.boarding.t > 1.3 && !land.boarding.done) { land.boarding.done = true; game.boardingWon(land.boarding.enemy); } }
   };
   land.respawn = () => { const isl = land.isl; land.enter(isl); const loss = deathTax(game.save); return loss; };
+  land.hurtFrom = (dmg, from) => hurtPlayer(dmg, from, false);
   land.grant = grant; land.pick = pick; land.refreshBase = () => refreshBase(game.world, game.save); land.SWORDS = SWORDS; land.ISLANDS = ISLANDS;
   return land;
 }

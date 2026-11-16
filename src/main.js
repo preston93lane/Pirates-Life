@@ -7,6 +7,7 @@ import { createLand } from './land.js';
 import { createUI } from './ui.js';
 import { createWildlife } from './wildlife.js';
 import { createTownFolk, createWorkers } from './townfolk.js';
+import { createAnimals } from './animals.js';
 import { createQuests } from './quests.js';
 import { input, initInput } from './input.js';
 import { audio } from './audio.js';
@@ -36,6 +37,7 @@ game.land = createLand(game);
 game.wild = createWildlife(game);
 game.townfolk = createTownFolk(game);
 game.workers = createWorkers(game);
+game.animals = createAnimals(game);
 game.world.onBase = () => game.workers.spawn();
 setPlayerLook(lookSpec(game.save));
 window.__game = game; // handy for debugging and automated tests
@@ -228,7 +230,7 @@ function frame(now) {
   if (running) {
     const sim = dt;
     game.sea.update(sim, game.mode === 'sea' || game.mode === 'deck');
-    game.wild.update(sim); game.townfolk.update(sim); game.workers.update(sim);
+    game.wild.update(sim); game.townfolk.update(sim); game.workers.update(sim); game.animals.update(sim);
     if (game.mode !== 'sea') game.land.update(sim);
     if (game.mode === 'land') game.reveal(game.land.player.x, game.land.player.z, 200);
     game.ctx = game.mode === 'sea' ? game.sea.context() : game.land.context();
