@@ -1,6 +1,6 @@
 // HUD and menus. Plain DOM over the canvas.
 import * as THREE from 'three';
-import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, HANDS, GRADES, STATIONS, AMMO_PACK, TREE, TREE_BRANCH, POINTS_PER_RANK, STORES } from './data.js';
+import { SHIP_CLASSES, SHIP_UPGRADES, MAX_UPGRADE, SWORDS, GUNS, GOODS, BUILDINGS, MAX_BUILDING, ISLANDS, ISLAND, ZONES, WORLD_R, RANKS, xpFor, PROD_CAP_HOURS, LOOK_OPTS, PETS, FACTIONS, PORT_FACTION, AMMO, SWIVEL, FLAGS, JOLLY, DEEDS, BOUNTIES, BOMB, CHARTS, HANDS, GRADES, STATIONS, AMMO_PACK, TREE, TREE_BRANCH, POINTS_PER_RANK, STORES } from './data.js';
 import { createMap } from './map.js';
 import { flagTexture } from './ship.js';
 import { shipStats, playerStats, cargoUsed, can, pay, upgradeCost, buildingCost, repairCost, costText, buyPrice, sellPrice, SAIL_COLORS, pending, clearSave, writeSave, isWanted, standing, addRep, bribeCost, freshUps, exportSave, importSave, makeHand, hireCost, addMorale, moraleWord, crewBonus, sk, feat, skillPoints, nodeRank, nodeOpen, storesFull, storesCost } from './state.js';
@@ -284,6 +284,7 @@ export function createUI(game) {
         const s = S(), ps = playerStats(s), l = s.look, hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
         const sw = (key, opts) => `<div class="swatches">${Object.entries(opts).map(([k, c]) => `<button type="button" data-do="look" data-arg="${key}:${k}" class="${String(l[key]) === k ? 'on' : ''}" style="background:${hex(c)}" aria-label="${key} ${k}"></button>`).join('')}</div>`;
         return `<div class="stat"><div><small>Rank ${s.level}</small><b>${RANKS[Math.min(RANKS.length - 1, s.level - 1)]}</b></div><div><small>Infamy</small><b>${s.xp} / ${xpFor(s.level)}</b></div><div><small>Health</small><b>${ps.maxHp}</b></div><div><small>Ships sunk</small><b>${s.stats.sunk}</b></div><div><small>Ships boarded</small><b>${s.stats.boarded}</b></div><div><small>Foes slain</small><b>${s.stats.kills}</b></div><div><small>Treasures dug</small><b>${s.stats.dug}</b></div></div>`
+          + `<h3>Star charts (${Object.keys(s.charts || {}).length} of ${Object.keys(CHARTS).length})</h3>` + Object.entries(CHARTS).map(([k, c]) => row(s.charts && s.charts[k] ? esc(c.name) : '???', s.charts && s.charts[k] ? esc(c.desc) : 'Found in hidden chests, from the story, or from captains after rank 4.', '')).join('')
           + `<h3>Coat</h3>${sw('coat', LOOK_OPTS.coat)}<h3>Sash</h3>${sw('sash', LOOK_OPTS.sash)}<h3>Skin</h3>${sw('skin', LOOK_OPTS.skin)}<h3>Hat</h3><div class="choices">${Object.entries(LOOK_OPTS.hat).map(([k, n]) => btn(n, 'look', `hat:${k}`, l.hat === k ? 'go' : '')).join('')}</div>`;
       },
       Gear() {

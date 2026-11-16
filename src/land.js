@@ -1,8 +1,8 @@
 // Everything on foot: walking islands, sword and gun combat, boarding fights, chests, digging, talking.
 import * as THREE from 'three';
 import { buildCharacter, buildPet, staticFigure } from './character.js';
-import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES, HANDS, GRADES } from './data.js';
-import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus, feat, addRep } from './state.js';
+import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES, HANDS, GRADES, CHARTS, CHART_CHANCE } from './data.js';
+import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus, feat, addRep, giveChart } from './state.js';
 import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './util.js';
 import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE, TAV } from './world.js';
 import { input } from './input.js';
@@ -542,7 +542,7 @@ export function createLand(game) {
     if (ch.c.cave) { s.caves[ch.c.cave] = Date.now(); const r = chestLoot(3); r.gold = Math.round(r.gold * 1.4); game.reward(r, 'The cave hoard is yours'); if (Math.random() < 0.6) { s.bombs = Math.min(6, s.bombs + 2); game.toast('Two powder flasks were packed in with it.', 'gold'); } }
     else if (ch.c.navy) { const big = land.isl.navy.S > 30; s.navyRaid[ch.c.navy] = Date.now(); game.reward({ gold: Math.round(rand(900, 1300) * (big ? 1.6 : 0.8) * (1 + s.level * 0.08)), iron: big ? 90 : 40, timber: big ? 60 : 30, xp: big ? 320 : 160 }, `The strongroom of ${land.isl.navy.name} is yours`); addRep(s, 'navy', big ? -30 : -18); game.cheer(8); game.emit('raid', { island: land.isl.id }); game.toast('The navy will not forgive this.', 'warn'); }
     else if (ch.c.vault) { s.raidAt = Date.now(); game.reward({ gold: Math.round(rand(700, 950) * (1 + s.level * 0.08)), iron: 60, timber: 60, xp: 150 }, "Bloodwater's vault is yours"); game.emit('raid', { island: land.isl.id }); }
-    else { s.chests[ch.c.id] = true; if (ch.c.id === 'bones:idol' && !s.pets.parrot) { s.pets.parrot = true; if (!s.pet) { s.pet = 'parrot'; land.setPet(); } game.ui.banner('New companion', PETS.parrot.name, 'A scarlet bird drops from the idol onto your shoulder. ' + PETS.parrot.perk); } const r = chestLoot(ch.c.tier); game.reward(r, r.rum ? 'Chest opened (and a bottle of rum)' : 'Chest opened'); }
+    else { s.chests[ch.c.id] = true; if (Math.random() < CHART_CHANCE) { const c = giveChart(s); if (c) game.toast(`A star chart is tucked in the chest: ${CHARTS[c].name}.`, 'gold'); } if (ch.c.id === 'bones:idol' && !s.pets.parrot) { s.pets.parrot = true; if (!s.pet) { s.pet = 'parrot'; land.setPet(); } game.ui.banner('New companion', PETS.parrot.name, 'A scarlet bird drops from the idol onto your shoulder. ' + PETS.parrot.perk); } const r = chestLoot(ch.c.tier); game.reward(r, r.rum ? 'Chest opened (and a bottle of rum)' : 'Chest opened'); }
   }
   land.context = () => {
     const p = land.player, isl = land.isl, s = game.save;

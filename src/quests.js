@@ -1,6 +1,6 @@
 // Story chain and tavern jobs. Both are driven by events the rest of the game emits.
-import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION, DAILY, DEEDS, BOUNTIES, FOLK } from './data.js';
-import { cargoUsed, shipStats, addRep } from './state.js';
+import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION, DAILY, DEEDS, BOUNTIES, FOLK, CHARTS } from './data.js';
+import { cargoUsed, shipStats, addRep, giveChart } from './state.js';
 import { pick, rand, dist2 } from './util.js';
 
 const PORTS = ISLANDS.filter((i) => i.kind === 'town');
@@ -30,6 +30,7 @@ export function createQuests(game) {
     if (st.given || !step.give) return;
     if (step.give.map) S().maps.push(Object.assign({}, step.give.map));
     if (step.give.quest) S().questCargo += step.give.quest;
+    if (step.give.chart) { const c = giveChart(S(), step.give.chart); if (c) game.toast(`A star chart: ${CHARTS[c].name}. See Captain, Charts.`, 'gold'); }
     st.given = true;
   };
   const told = {};
@@ -73,7 +74,7 @@ export function createQuests(game) {
     // bounty collected?
     if (evt === 'sink' && s.bounty && d.type === s.bounty.id) {
       const b = BOUNTIES.find((x) => x.id === s.bounty.id), times = s.bountyDone[b.id] || 0;
-      s.bountyDone[b.id] = times + 1; s.bounty = null; s.stats.bounties = (s.stats.bounties || 0) + 1;
+      s.bountyDone[b.id] = times + 1; s.bounty = null; if (b.level >= 4) { const c = giveChart(s); if (c) game.toast(`${b.captain} carried a star chart: ${CHARTS[c].name}.`, 'gold'); } s.stats.bounties = (s.stats.bounties || 0) + 1;
       game.reward({ gold: Math.round(b.gold * (1 + 0.25 * times)), xp: Math.round(b.gold * 0.3) }, `Bounty collected: ${b.captain}`); game.ui.banner('Bounty collected', b.captain, 'The poster comes down. A harder name will take its place.');
       q.on('bounty', {});
     }

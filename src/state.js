@@ -1,5 +1,5 @@
 // Player save data, derived stats and the economy. No rendering in here.
-import { TREE, POINTS_PER_RANK, STORES, HANDS, GRADES, HAND_NAMES, HAND_NICK, STATIONS, LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_CAP_HOURS, GOODS, PORT_PRICES, xpFor, RANKS } from './data.js';
+import { CHARTS, TREE, POINTS_PER_RANK, STORES, HANDS, GRADES, HAND_NAMES, HAND_NICK, STATIONS, LOOK_OPTS, SHIP_CLASSES, SHIP_UPGRADES, SWORDS, GUNS, BUILDINGS, PROD_CAP_HOURS, GOODS, PORT_PRICES, xpFor, RANKS } from './data.js';
 
 const KEY = 'pirates-life-save-v1';
 
@@ -41,7 +41,7 @@ export function newSave() {
     ship: { cls: 'cutter', up: null, hp: 1, sail: 'bone' },
     owned: { cutter: freshUps() },
     rep: { navy: 0, guild: 10, smug: 10, blood: -45 }, armory: {}, shot: 'round', swivel: false, hostages: [],
-    tree: {}, folk: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
+    tree: {}, charts: {}, folk: {}, food: 30, water: 30, limes: 15, scurvy: 0, ammo: {}, favour: false,
     crew: null, morale: 70, station: 'even', atWill: false, hire: null,
     bombs: 2, bless: 0, caves: {}, music: true, daily: null, deeds: {}, bounty: null, bountyDone: {}, mercy: 0, tips: {}, gfx: 'auto',
     flag: 'pirate', flags: {}, jolly: { field: 'black', emblem: 'skull' }, fog: '', course: null,
@@ -133,3 +133,11 @@ export const bribeCost = (s) => Math.max(0, Math.ceil((-15 - s.rep.navy) * 14));
 // Backup codes: the save as text, so it can be kept somewhere safe or moved to another device.
 export function exportSave(s) { try { return btoa(unescape(encodeURIComponent(JSON.stringify(s)))); } catch (e) { return ''; } }
 export function importSave(code) { try { const s = JSON.parse(decodeURIComponent(escape(atob(code.trim())))); if (s && !s.crew) s.old = true; return s && s.v === 1 && s.ship && s.stats ? fix(Object.assign(newSave(), s, { crew: s.crew || null })) : null; } catch (e) { return null; } }
+
+// Give the captain a star chart he does not yet have. Returns its id, or null if he has them all.
+export function giveChart(s, id) {
+  const left = Object.keys(CHARTS).filter((k) => !(s.charts && s.charts[k]));
+  if (!left.length) return null;
+  const pick = id && !(s.charts && s.charts[id]) ? id : left[Math.floor(Math.random() * left.length)];
+  s.charts = s.charts || {}; s.charts[pick] = true; return pick;
+}

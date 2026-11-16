@@ -125,7 +125,7 @@ export const xpFor = (level) => Math.round(90 * Math.pow(level, 1.55));
 export const STORY = [
   { title: 'A Ship of Your Own', text: 'You won a leaky sloop at cards. Find Mara at the Saltmere tavern. She always has work.', obj: { type: 'talk', npc: 'saltmere:tavern' }, mark: 'saltmere', reward: { gold: 60, xp: 30 } },
   { title: 'First Blood', text: 'Bloodwater sloops are picking off traders near Saltmere. Sink or board one. Red sails; line up your broadside and fire.', obj: { type: 'sink', faction: 'pirate', n: 1 }, reward: { gold: 150, xp: 80 } },
-  { title: "Dead Men's Gold", text: 'The sloop carried a chart: something is buried on Gull Rock, north-west of Saltmere. Go ashore, find the mark, and dig.', obj: { type: 'dig', island: 'gull' }, give: { map: { island: 'gull', spot: 0, tier: 1 } }, mark: 'gull', reward: { gold: 100, xp: 90, timber: 30, iron: 10 } },
+  { title: "Dead Men's Gold", text: 'The sloop carried a chart: something is buried on Gull Rock, north-west of Saltmere. Go ashore, find the mark, and dig.', obj: { type: 'dig', island: 'gull' }, give: { map: { island: 'gull', spot: 0, tier: 1 }, chart: 'hunter' }, mark: 'gull', reward: { gold: 100, xp: 90, timber: 30, iron: 10 } },
   { title: 'A Place to Hide', text: "Gold needs a home. Sail north-east to the cove at Rogue's Rest and raise a Lumber Camp.", obj: { type: 'build', building: 'lumber' }, mark: 'rest', reward: { gold: 150, xp: 100, timber: 20 } },
   { title: 'The Sugar Run', text: 'Honest pay, for once. Carry this sugar west to the tavern at Port Regal. Keep your guns quiet near the navy.', obj: { type: 'deliver', good: 'sugar', n: 8, to: 'regal' }, give: { quest: 8 }, mark: 'regal', reward: { gold: 320, xp: 130 } },
   { title: 'The Isle of Bones', text: 'A scholar in Port Regal pays for proof the dead walk. Put six of them back in the ground on the Isle of Bones.', obj: { type: 'kill', foe: 'skeleton', n: 6 }, mark: 'bones', reward: { gold: 380, xp: 220, iron: 30 } },
@@ -317,3 +317,14 @@ export const FOLK = [
     { say: "The navy keeps its pay chest in the strongroom at Fort Regal, up on the hill behind the town. It is the hardest nut in these islands. Crack it and every free captain will know your name.", obj: { type: 'raid', island: 'regal' }, reward: { gold: 1200, xp: 600, iron: 60 }, done: "Ha! You mad devil. They will be telling that one when we're both bones." },
   ] },
 ];
+
+// ----- star charts: each shows one constellation. Sail the path it draws to open a gateway to a new sea. -----
+export const CHARTS = {
+  hunter: { name: 'The Hunter', desc: 'A warrior with a belt of three stars.' },
+  serpent: { name: 'The Serpent', desc: 'A long line of stars that coils across the north.' },
+  lantern: { name: 'The Lantern', desc: 'A cluster that shows the way home.' },
+  anchor: { name: 'The Anchor', desc: 'Four stars and a bar, seen by every captain.' },
+  crown: { name: 'The Crown', desc: 'Five stars in a ring over the open water.' },
+  wolf: { name: 'The Wolf', desc: 'Pale stars that only show after midnight.' },
+};
+export const CHART_CHANCE = 0.08; // a hidden chest holds a chart this often, until you have them all
