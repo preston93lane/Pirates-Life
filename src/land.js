@@ -7,6 +7,7 @@ import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './ut
 import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE, TAV } from './world.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
+import { placeModel } from './models.js';
 
 const ATK_DUR = [0.4, 0.4, 0.54], HIT_U = 0.42, REACH = 2.5;
 const BLADES = [0x8c8a84, 0xb9bdc1, 0xd8dcdf, 0x6f7f95, 0x9fd0e8];
@@ -122,6 +123,7 @@ export function createLand(game) {
     for (const m of land.mounds) scene.remove(m);
     for (const q of land.pois) if (q.mesh) scene.remove(q.mesh);
     for (const m of land.props || []) scene.remove(m);
+    land.tavToken = null;
     land.chests = []; land.mounds = []; land.pois = []; land.props = []; land.tav = null; land.roomCols = null; land.alarmed = false; land.focus = null; land.tokens = 0;
   }
   function spawnPlayer(x, z, face) {
@@ -194,8 +196,25 @@ export function createLand(game) {
     c.tables.forEach(([x, z], i) => { const [key, name, a, b] = GAMES[i]; land.roomCols.push({ x: c.x + x, z: c.z + z, r: 1.35 }); fig(a, x - 1.75, z, Math.PI / 2, 0.4); fig(b, x + 1.75, z, -Math.PI / 2, 0.4); spot(x, z - 1.2, 2.3, `Play ${name}`, 'Pull up a stool', 'chest', () => game.ui.openTavern(isl, npc, 'Games', key)); });
     fig('brute', -c.hw + 2.2, 3.4, Math.PI / 2, 0.6); spot(-c.hw + 2.2, 3.4, 2.1, 'Arm wrestle', 'The big fellow by the fire', 'sword', () => game.ui.openTavern(isl, npc, 'Games', 'arm'));
     game.ui.hireOffers(isl.id).slice(0, 5).forEach((o, i) => { const x = c.hw - 1.2, z = -6.5 + i * 2.5; fig(FOES[HANDS[o.role].foe].look, x, z, -Math.PI / 2, 0.45); spot(x - 0.6, z, 1.5, 'Talk', `${o.name}, ${GRADES[o.g].name.toLowerCase()} ${HANDS[o.role].name.toLowerCase()} looking for a ship`, 'person', () => game.ui.openTavern(isl, npc, 'Hands')); });
+    furnishTavern(c, {});
     petAshore();
   });
+  // The tavern furniture comes from the model library. If a model is missing, plain tables stand in.
+  async function furnishTavern(c, token) {
+    const top = c.top, live = () => land.tavToken === token && land.cave && land.cave.tavern;
+    land.tavToken = token;
+    const put = async (path, x, z, rot, s = 1, y = top) => { if (!live()) return null; const m = await placeModel(scene, path, c.x + x, y, c.z + z, rot, s); if (m) land.props.push(m); return m; };
+    await put('furniture/rug_rectangle_A.gltf', 0, 0, 0, 1.25, top + 0.03);
+    await put('furniture/shelf_B_large.gltf', 0, 9.2, 0, 1.2);
+    for (const x of [-6.6, 6.6]) await put('furniture/lamp_standing.gltf', x, -6.6, 0, 1.1);
+    for (const x of [-6.6, 6.6]) await put('furniture/lamp_standing.gltf', x, 6.6, 0, 1.1);
+    for (const [tx, tz] of c.tables) {
+      const ok = await put('furniture/table_medium.gltf', tx, tz, 0, 1);
+      if (!ok) { const t = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.1, 10), new THREE.MeshLambertMaterial({ color: 0x7a5c3e })); t.position.set(c.x + tx, top + 0.95, c.z + tz); scene.add(t); land.props.push(t); }
+      for (let i = 0; i < 4; i++) { const a = Math.PI / 4 + i * Math.PI / 2; await put('furniture/chair_A.gltf', tx + Math.sin(a) * 1.35, tz + Math.cos(a) * 1.35, a + Math.PI, 1); }
+    }
+    if (!live()) return;
+  }
   land.exitTavern = () => game.fade(() => { const isl = land.isl, n = isl.npcs.find((x) => x.kind === 'tavern'); land.enter(isl, { x: n.x, z: n.z - 3.5 }); });
   // ----- powder flasks -----
   const bombGeo = new THREE.IcosahedronGeometry(0.16, 0), bombMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a, flatShading: true });

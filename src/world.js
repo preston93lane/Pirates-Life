@@ -657,7 +657,7 @@ export function createWorld(scene) {
     for (let i = 0; i < 14; i++) k.add(cyl(0.09, 0.11, 0.42, 6), [0x3f7a5c, 0x7a4a2a, 0x8a2a22, 0xc9a94a][i % 4], at(-4.2 + (i % 7) * 1.4, i < 7 ? 1.97 : 2.77, H - 0.3), [0, 0, 0], 1, 0, 'plain');
     for (const x of [-3.6, 3.6]) k.add(cyl(0.5, 0.5, 1.1, 8), PAL.timber, at(x, 1.75, 6.4), [Math.PI / 2, 0, 0]); // kegs on the bar
     c.tables = [[-4.4, -3.2], [4.4, -3.2], [0, 1.6]];
-    for (const [x, z] of c.tables) { k.add(cyl(1.2, 1.2, 0.1, 10), PAL.plank, at(x, 0.95, z)); k.add(cyl(0.16, 0.3, 0.9, 6), PAL.darkTimber, at(x, 0.45, z)); for (let i = 0; i < 4; i++) k.add(cyl(0.26, 0.26, 0.5, 6), PAL.timber, at(x + Math.sin(i * 1.57 + 0.8) * 1.75, 0.25, z + Math.cos(i * 1.57 + 0.8) * 1.75)); k.add(cyl(0.07, 0.09, 0.22, 5), 0xc79a3a, at(x + 0.4, 1.1, z + 0.2), [0, 0, 0], 1, 0, 'plain'); k.add(box(0.16, 0.3, 0.16), PAL.lit, at(x - 0.2, 1.15, z - 0.3), [0, 0, 0], 1, 0); }
+    // tables, chairs and rugs are placed by land.js from the model library (with a fallback there)
     k.add(box(0.8, 2.6, 3.2), PAL.stone, at(-W + 0.3, 1.3, 5.6)); k.add(box(0.5, 1.2, 1.8), 0x0d0b0a, at(-W + 0.75, 0.6, 5.6), [0, 0, 0], 1, 0, 'plain'); k.add(cone(0.5, 0.9, 5), 0xff9a3c, at(-W + 0.9, 0.5, 5.6), [0, 0, 0], 1, 0, 'plain'); // hearth
     for (const [x, z] of [[-W + 0.3, -4], [W - 0.3, -4], [W - 0.3, 3], [-W + 0.3, 0.5], [-3, H - 0.1], [3, H - 0.1]]) k.add(box(0.36, 0.46, 0.36), PAL.lit, at(x, 2.5, z), [0, 0, 0], 1, 0);
     for (const [x, z, s] of [[W - 1, H - 1.2, 1.2], [W - 2.2, H - 1, 1], [-W + 1, -H + 1.2, 1.1]]) k.add(cyl(0.4 * s, 0.4 * s, 0.95 * s, 7), PAL.timber, at(x, 0.48 * s, z));
