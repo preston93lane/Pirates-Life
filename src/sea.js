@@ -664,7 +664,8 @@ export function createSea(game) {
     sea.targetT -= dt; if (sea.targetT <= 0) { sea.targetT = 0.3; pickTarget(); }
     sea.fogT = (sea.fogT || 0) - dt; if (sea.fogT <= 0) { sea.fogT = 0.5; game.reveal(p.x, p.z, game.save.pet === 'parrot' ? 430 : 310); }
     // discovery
-    for (const isl of ISLANDS) if (!game.save.seen[isl.id] && dist2(p.x, p.z, isl.x, isl.z) < isl.r + 170) { game.save.seen[isl.id] = true; game.reward({ xp: 25 }, `Discovered ${isl.name}`); game.emit('visit', { island: isl.id }); }
+    // your hideout is hidden: you must reach its shore to find it
+    for (const isl of ISLANDS) if (!game.save.seen[isl.id] && dist2(p.x, p.z, isl.x, isl.z) < (isl.kind === 'hideout' ? isl.r + 70 : isl.r + 170)) { game.save.seen[isl.id] = true; game.reward({ xp: 25 }, `Discovered ${isl.name}`); game.emit('visit', { island: isl.id }); }
     let zone = null; for (const id in ZONES) { const z = ZONES[id]; if (dist2(p.x, p.z, z.x, z.z) < z.r) zone = id; }
     if (zone !== sea.zone) { sea.zone = zone; if (zone) game.toast(`Entering ${ZONES[zone].name}`, 'warn'); }
     // drifting bottles with treasure maps

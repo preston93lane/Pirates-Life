@@ -508,15 +508,22 @@ const BUILD_DRAW = {
   quarters(m, l) { m.add(box(5 + l * 1.5, 2.8, 4.2), PAL.plank, [0, 1.4, 0], [0, 0, 0], 1, 0.1); const r = cone(0.7071, 1, 4); r.rotateY(Math.PI / 4); m.add(r, PAL.slate, [0, 3.7, 0], [0, 0, 0], [6 + l * 1.7, 1.8, 5]); m.add(box(1.1, 1.9, 0.2), PAL.darkTimber, [0, 0.95, 2.1]); m.add(box(0.8, 0.8, 0.16), PAL.lit, [1.8, 1.7, 2.1], [0, 0, 0], 1, 0); },
   battery(m, l) { m.add(cyl(3.6, 4, 1.4, 8), PAL.stone, [0, 0.7, 0], [0, 0, 0], 1, 0.1); for (let i = 0; i < l; i++) { const x = (i - (l - 1) / 2) * 1.9; m.add(cyl(0.2, 0.28, 2.2, 6), PAL.iron, [x, 1.9, 1.6], [Math.PI / 2 - 0.12, 0, 0]); m.add(box(0.8, 0.5, 1.1), PAL.timber, [x, 1.6, 1]); } },
 };
+const BASE_MODEL = { vault: 'building_tower_base_green', lumber: 'building_lumbermill_green', mine: 'building_mine_green', still: 'building_market_green', quarters: 'building_barracks_green', battery: 'building_tower_catapult_green' };
 export function refreshBase(world, save) {
-  const isl = world.byId.rest;
+  const isl = world.byId.rest, token = (world.baseToken = (world.baseToken || 0) + 1);
+  for (const m of world.baseModels || []) world.scene.remove(m);
+  world.baseModels = [];
   if (world.baseMesh) { world.scene.remove(world.baseMesh); world.baseMesh.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
   isl.colliders = isl.colliders.filter((c) => !c.base);
   const all = new Kit(KINDS);
   for (const p of isl.plots) {
     const lvl = save.base.b[p.id] || 0, y = heightAt(p.x, p.z);
     all.origin = new THREE.Matrix4().makeRotationY(p.face + Math.PI).setPosition(p.x, y - 0.1, p.z);
-    if (lvl) { BUILD_DRAW[p.id](all, lvl); isl.colliders.push({ x: p.x, z: p.z, r: 3.4, base: true }); }
+    if (lvl) { // the built, real model; the hand-made one stays as a fallback
+      isl.colliders.push({ x: p.x, z: p.z, r: 3.4, base: true });
+      placeModel(world.scene, 'medieval/buildings/green/' + BASE_MODEL[p.id] + '.gltf', p.x, y - 0.1, p.z, p.face + Math.PI, 1.05 + 0.07 * lvl).then((m) => { if (m && world.baseToken === token) world.baseModels.push(m); else if (m) world.scene.remove(m); });
+      if (!BASE_MODEL[p.id]) BUILD_DRAW[p.id](all, lvl);
+    }
     else { for (const [x, z] of [[-2.5, -2.5], [2.5, -2.5], [-2.5, 2.5], [2.5, 2.5]]) all.add(cyl(0.08, 0.1, 1.1, 4), PAL.timber, [x, 0.55, z]); all.add(box(1.3, 0.8, 0.1), PAL.plank, [0, 1.5, 3.4]); all.add(cyl(0.07, 0.07, 1.8, 4), PAL.timber, [0, 0.9, 3.4]); }
   }
   all.origin = null;
