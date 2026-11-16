@@ -114,6 +114,9 @@ export const FOES = {
   warden: { name: 'Bone Warden', hp: 300, dmg: 22, speed: 3.2, tele: 0.9, look: 'skeleton', heavy: true, scale: 1.6, mini: true, xp: 150, gold: [120, 220] },
   chief: { name: 'Bandit Chief', hp: 260, dmg: 18, speed: 4.0, tele: 0.5, look: 'captain', scale: 1.2, mini: true, xp: 130, gold: [120, 200] },
   matriarch: { name: 'Crab Matriarch', hp: 280, dmg: 18, speed: 3.8, tele: 0.7, look: 'crab', heavy: true, scale: 2, mini: true, xp: 140, gold: [80, 160] },
+  frostraider: { name: 'Frost Raider', hp: 52, dmg: 13, speed: 3.7, tele: 0.55, look: 'frostraider', xp: 18, gold: [8, 22] },
+  frostgiant: { name: 'Frost Giant', hp: 420, dmg: 30, speed: 3.0, tele: 0.95, look: 'giant', heavy: true, scale: 2.3, mini: true, xp: 200, gold: [150, 260] },
+  yeti: { name: 'The Yeti', hp: 1100, dmg: 36, speed: 3.8, tele: 0.8, look: 'yeti', heavy: true, scale: 2.7, boss: true, xp: 600, gold: [600, 900] },
   cultist: { name: 'Ash Cultist', hp: 46, dmg: 13, speed: 3.9, tele: 0.5, look: 'cultist', xp: 18, gold: [8, 22] },
   crew: { name: 'Crewmate', hp: 70, dmg: 11, speed: 4.0, tele: 0.5, look: 'crew' },
   h_bravo: { name: 'Swordmaster', hp: 95, dmg: 21, speed: 4.8, tele: 0.4, look: 'bravo' },
@@ -352,3 +355,6 @@ export const GUILDS = {
 // ----- the Ember Sea: its own ships and its boss -----
 SEA_FOES.ember = { name: 'Ember Raider', cls: 'brig', faction: 'ghost', hp: 240, guns: 5, dmg: 9, crew: ['cultist', 'cultist', 'cultist', 'marksman', 'captain'], gold: [220, 340], goods: 3, xp: 150 };
 SEA_FOES.wyrm = { name: 'The Ash Wyrm', cls: 'galleon', faction: 'ghost', hp: 900, guns: 8, dmg: 12, crew: ['cultist', 'cultist', 'cultist', 'brute', 'captain'], gold: [1200, 1600], goods: 0, xp: 600, boss: true };
+
+// ----- the Frost Sea: ice reavers that cut your rigging with chain shot -----
+SEA_FOES.reaver = { name: 'Ice Reaver', cls: 'xebec', faction: 'ghost', hp: 260, guns: 6, dmg: 9, crew: ['frostraider', 'frostraider', 'frostraider', 'marksman', 'captain'], gold: [220, 340], goods: 3, xp: 160 };

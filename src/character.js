@@ -24,6 +24,9 @@ const LOOKS = {
   wright: { coat: null, shirt: 0x8c7a5a, pants: 0x4a3b2c, boots: 0x1c1713, hat: 'wide', hatC: 0x6e5a40, apron: 0x5c4733 },
   smith: { coat: null, shirt: null, pants: 0x2f2a26, boots: 0x16120f, hat: 'none', hair: 0x1a1512, bulk: 1.15, apron: 0x3a2e24 },
   merchant: { coat: 0x2f5d63, shirt: 0xc4b99d, pants: 0x2a2622, boots: 0x16120f, hat: 'wide', hatC: 0x1c1a19, tails: true, sash: 0xb58a2e },
+  frostraider: { coat: 0xb8b2a6, shirt: 0x5a4a3a, pants: 0x3a3430, boots: 0x2a2420, hat: 'bandana', hatC: 0x8a8a8a, sash: 0x4a6a8a, weapon: 'axe' },
+  giant: { coat: 0x4a5a6a, shirt: 0x6a7a8a, pants: 0x3a4450, boots: 0x2a3038, hat: 'none', hair: 0xdfe6ea, skinC: 0x9fb8d0, bulk: 1.5, weapon: 'axe' },
+  yeti: { coat: 0xeef2f4, shirt: 0xe2e8ec, pants: 0xe2e8ec, boots: 0xc8d0d6, hat: 'none', hair: 0xf4f7f9, skinC: 0xcfd8de, bulk: 1.7 },
   cultist: { coat: 0x5a1a14, shirt: 0x2a1410, pants: 0x1c1212, boots: 0x0f0a0a, hat: 'rag', hatC: 0x3a1410, sash: 0xd9702a, weapon: 'cutlass', blade: 0xb0502a },
   crab: { crab: true },
 };
@@ -88,7 +91,7 @@ export function buildCharacter(lookName, opts = {}) {
   let L = LOOKS[lookName];
   if (L.crab) return buildCrab();
   if (lookName === 'player' && playerLook) L = Object.assign({}, L, playerLook);
-  const thin = L.thin || 1, bulk = L.bulk || 1, skin = L.bone ? 0xcfc7b0 : SKIN[(L.skinI ?? opts.seed ?? (Math.random() * 4)) % 4 | 0];
+  const thin = L.thin || 1, bulk = L.bulk || 1, skin = L.bone ? 0xcfc7b0 : L.skinC ? L.skinC : SKIN[(L.skinI ?? opts.seed ?? (Math.random() * 4)) % 4 | 0];
   const sleeve = L.bone ? skin : L.coat ?? L.shirt ?? skin, chest = L.bone ? skin : L.coat ?? L.shirt ?? skin;
   const root = new THREE.Group(), P = {};
   P.pivot = joint(root, 0, 0.92, 0); const inner = joint(P.pivot, 0, -0.92, 0);

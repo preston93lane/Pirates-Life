@@ -64,16 +64,19 @@ export function createSea(game) {
   };
   function populate() {
     const lv = game.save.level, count = (f) => sea.ships.filter((s) => s.alive && s.faction === f).length;
+    // beyond the gates: only that sea's own ships, and plenty of them, like the Bloodwater sloops at home
+    const reg = game.seas && game.seas.region;
+    if (reg) {
+      const type = reg.id === 'ember' ? 'ember' : 'reaver';
+      for (let i = 0; i < 2 && count('ghost') < 5; i++) { const pos = openWater(sea.player.x, sea.player.z, 260, 620); if (pos) sea.spawn(type, pos); }
+      const sr = ISLAND_BY.ember_b, ready = !game.save.bosses.wyrm || Date.now() - game.save.bosses.wyrm > 20 * 60000;
+      if (reg.id === 'ember' && sr && ready && !sea.ships.some((s) => s.alive && s.type === 'wyrm') && dist2(sea.player.x, sea.player.z, sr.x, sr.z) < 420) { const pos = openWater(sr.x, sr.z, 120, 340); if (pos) { sea.spawn('wyrm', pos); game.toast('The water boils at Serpent Rock. The Ash Wyrm rises!', 'warn'); } }
+      return;
+    }
     if (count('merchant') < 2) sea.spawn('merchant');
     if (count('pirate') < (lv >= 5 ? 3 : 2)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
     // fleets: from rank 3 a pirate gang can sail as three, and once you're wanted the navy patrols in pairs
     if (lv >= 3 && count('pirate') < 3 && Math.random() < 0.012) { const pos = openWater(sea.player.x, sea.player.z, 420, 640); if (pos) { sea.spawn('pirate2', pos); sea.spawn('pirate', { x: pos.x + 22, z: pos.z + 10 }); sea.spawn('pirate', { x: pos.x - 18, z: pos.z + 20 }); game.toast('A pirate fleet of three is out on the water.', 'warn'); } }
-    // the Ember Sea: at least two raiders patrol it, and the Ash Wyrm rises near Serpent Rock
-    if (game.seas && game.seas.region && game.seas.region.id === 'ember') {
-      if (count('ghost') < 4) { const pos = openWater(sea.player.x, sea.player.z, 260, 620); if (pos) sea.spawn('ember', pos); }
-      const sr = ISLAND_BY.ember_b, ready = !game.save.bosses.wyrm || Date.now() - game.save.bosses.wyrm > 20 * 60000;
-      if (sr && ready && !sea.ships.some((s) => s.alive && s.type === 'wyrm') && dist2(sea.player.x, sea.player.z, sr.x, sr.z) < 420) { const pos = openWater(sr.x, sr.z, 120, 340); if (pos) { sea.spawn('wyrm', pos); game.toast('The water boils at Serpent Rock. The Ash Wyrm rises!', 'warn'); } }
-    }
     if (game.save.rep.navy <= -20 && count('navy') < 2 && Math.random() < 0.01) { const pos = openWater(sea.player.x, sea.player.z, 420, 640); if (pos) { sea.spawn('navy', pos); sea.spawn('navy', { x: pos.x + 20, z: pos.z - 16 }); game.toast('A navy patrol of two has your scent.', 'warn'); } }
     if (count('navy') < (game.save.rep.navy <= -20 ? 2 : 1)) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
     if (game.save.rep.navy <= -60 && !sea.ships.some((s) => s.alive && s.hunter)) { sea.hunterT = (sea.hunterT ?? 20) - 2.5; if (sea.hunterT <= 0) { const pos = openWater(sea.player.x, sea.player.z, 460, 680); if (pos && sea.spawn('hunter', pos)) { sea.hunterT = 100; game.toast('A navy hunter has your scent. She outguns you.', 'warn'); } } }
@@ -165,7 +168,7 @@ export function createSea(game) {
     const dbl = sh.isPlayer && sea.double; if (dbl) sea.double = false;
     sh.reload[side] = sh.isPlayer ? sh.stats.reload * (dbl ? 1.5 : 1) : sh.reloadTime;
     if (sh.isPlayer) { sea.deaf = 6; sea.exposed = 45; } // gunfire drowns out a siren's song, and gives away false colours
-    const kind = sh.isPlayer ? useShot(sh.muzzles(side).length) : sh.faction === 'navy' && Math.random() < 0.25 ? 'chain' : (sh.type === 'pirate2' || sh.def.bounty) && Math.random() < 0.25 ? 'fire' : 'round';
+    const kind = sh.isPlayer ? useShot(sh.muzzles(side).length) : (sh.faction === 'navy' || sh.type === 'reaver') && Math.random() < (sh.type === 'reaver' ? 0.4 : 0.25) ? 'chain' : (sh.type === 'pirate2' || sh.type === 'ember' || sh.def.bounty) && Math.random() < (sh.type === 'ember' ? 0.45 : 0.25) ? 'fire' : 'round';
     const out = Math.atan2(sh.fz * side, -sh.fx * side); // world bearing of the beam normal
     sh.muzzles(side).forEach((m, i) => sea.pending.push({ t: i * 0.07 + rand(0.05), sh, side, i, out, target, kind, dbl }));
     return true;
@@ -495,7 +498,9 @@ export function createSea(game) {
       const k = clamp(Math.min(e.t / 7, (e.dur - e.t) / 7), 0, 1) * (1 - smooth(e.r * 0.5, e.r, dist2(p.x, p.z, e.x, e.z))); game.world.setWeather(k);
       if (k > 0.5) e.inside += dt;
       const c = game.camera.position;
-      for (let i = 0; i < Math.round(k * 16); i++) fx.emit(c.x + rand(-45, 45), c.y + rand(4, 26), c.z + rand(-45, 45), { color: 0xcfd8dc, speed: 0, dir: [9, -48, 3], life: 0.55, size: 0.3, alpha: 0.55, spread: 0 });
+      const reg = game.seas && game.seas.region && game.seas.region.id; // rain at home, ash in the Ember Sea, snow in the Frost Sea
+      const W = reg === 'frost' ? { color: 0xf4f8fa, dir: [3, -7, 1], life: 3.2, size: 0.5, alpha: 0.9, n: 22 } : reg === 'ember' ? { color: 0x5a524a, dir: [4, -12, 2], life: 1.8, size: 0.45, alpha: 0.8, n: 18 } : { color: 0xcfd8dc, dir: [9, -48, 3], life: 0.55, size: 0.3, alpha: 0.55, n: 16 };
+      for (let i = 0; i < Math.round(k * W.n); i++) fx.emit(c.x + rand(-45, 45), c.y + rand(4, 26), c.z + rand(-45, 45), { color: W.color, speed: 0, dir: W.dir, life: W.life, size: W.size, alpha: W.alpha, spread: 0 });
       if (active && p.alive) {
         p.heading += Math.sin(e.t * 0.9) * 0.05 * k * dt + Math.sin(e.t * 2.3) * 0.03 * k * dt;
         if (p.sail >= 1 && k > 0.5) { p.hp -= 2.4 * dt; e.warn -= dt; if (e.warn <= 0) { e.warn = 6; game.toast('The rigging is tearing! Reef your sails.', 'warn'); game.shake(0.3); } if (p.hp <= 0) { p.hp = 1; p.sail = 0.5; } }

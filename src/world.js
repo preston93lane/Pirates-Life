@@ -22,7 +22,7 @@ const N = 100; // terrain grid resolution per island
 export const platforms = []; // walkable raised rectangles: piers, ship decks, the cave floor
 export const TAV = { x: 4200, z: 400, ang: 0, hl: 10, hw: 8, top: 3 }; // one shared tavern room
 export const CAVE = { x: 4200, z: 0, ang: 0, hl: 17, hw: 11, top: 3 }; // one shared cave room, far outside the chart
-const MOUNT = { bones: 1.5, tooth: 1.6, regal: 0.8, saltmere: 0.6, blood: 0.5, rest: 0.45, crab: 0.15, gull: 0.3, shoals: 0.4 };
+const MOUNT = { ember_c: 2.4, frost_a: 1.6, frost_d: 1.2, bones: 1.5, tooth: 1.6, regal: 0.8, saltmere: 0.6, blood: 0.5, rest: 0.45, crab: 0.15, gull: 0.3, shoals: 0.4 };
 
 // >0 inside the island. Several lobes make headlands; bays bite coves out of the coast.
 function coast(isl, x, z) {
@@ -134,7 +134,7 @@ function plan(isl) {
   for (let i = 0; i < nChest; i++) isl.chests.push(Object.assign(spot(2, 40), { id: `${isl.id}:${i}`, tier: isl.kind === 'town' ? 1 : 2 }));
 
   const sp = (foe, p) => isl.spawns.push({ foe, x: p.x, z: p.z });
-  isl.biome = isl.jungle ? 'jungle' : isl.kind === 'crab' ? 'dry' : 'temperate';
+  isl.biome = isl.region === 'frost' ? 'frost' : isl.region === 'ember' ? 'ember' : isl.jungle ? 'jungle' : isl.kind === 'crab' ? 'dry' : 'temperate';
   if (isl.navy) { // a garrison far stronger than any bandit camp
     const n = isl.navy, big = n.S > 30, h = n.S / 2 - 3.5, nv = (foe, lx, lz) => { const p = n.at(lx, lz); isl.spawns.push({ foe, x: p.x, z: p.z, navy: true }); };
     (big ? [[-8, 6], [8, 6], [-11, -3], [11, -3], [0, 1], [-4, -9], [4, -9], [0, 11]] : [[-4, 3], [4, 3], [0, -2], [0, 6]]).forEach(([x, z]) => nv('soldier', x, z));
@@ -169,9 +169,11 @@ function plan(isl) {
   }
   // wild hostiles roam every island away from the ports, matched to its biome. Placed last so nothing else moves.
   if (isl.kind !== 'town' && isl.kind !== 'hideout' && !isl.navy) {
-    const pick = isl.region === 'ember' ? ['cultist', 'cultist', 'marksman'] : isl.biome === 'jungle' ? ['brigand', 'brigand', 'marksman'] : isl.biome === 'dry' ? ['crab', 'crab', 'brigand'] : ['brigand', 'marksman', 'brigand'];
+    const pick = isl.region === 'frost' ? ['frostraider', 'frostraider', 'marksman'] : isl.region === 'ember' ? ['cultist', 'cultist', 'marksman'] : isl.biome === 'jungle' ? ['brigand', 'brigand', 'marksman'] : isl.biome === 'dry' ? ['crab', 'crab', 'brigand'] : ['brigand', 'marksman', 'brigand'];
     const n = Math.max(2, Math.round(isl.r / 26));
     for (let i = 0; i < n; i++) { const p = spot(1.2, isl.h * 1.2, 16); isl.spawns.push({ foe: pick[i % pick.length], x: p.x, z: p.z, wild: true }); }
+    if (isl.region === 'frost') { const p = spot(3, isl.h * 1.4, 20); isl.spawns.push({ foe: 'frostgiant', x: p.x, z: p.z, wild: true }); } // a frost giant on every frozen island
+    if (isl.id === 'frost_a') { const p = spot(4, isl.h * 1.6, 24); isl.spawns.push({ foe: 'yeti', x: p.x, z: p.z }); } // the Yeti keeps to the heights of Stormhold
   }
 }
 
@@ -180,19 +182,23 @@ function terrainMesh(isl) {
   const s = N + 1, pos = new Float32Array(s * s * 3), col = new Float32Array(s * s * 3), uv = new Float32Array(s * s * 2), idx = [];
   const c = new THREE.Color(), c2 = new THREE.Color(), H = isl.grid;
   const tintA = isl.jungle ? PAL.jungle : isl.kind === 'crab' ? PAL.dryGrass : PAL.grass;
+  // each sea has its own ground: green at home, black ash and sand in the Ember Sea, snow and ice in the Frost Sea
+  const P = isl.region === 'ember' ? { sand: 0x2e2a28, wet: 0x1e1c1b, grass: 0x3a3a2e, dry: 0x4a4036, rock: 0x2a2422, dark: 0x1a1614, peak: 0x5a2a1a }
+    : isl.region === 'frost' ? { sand: 0xe6ecf0, wet: 0xa8b8c4, grass: 0xe2e8ec, dry: 0xc8d4dc, rock: 0x8a98a6, dark: 0x6a7684, peak: 0xf4f8fa }
+    : { sand: PAL.sand, wet: PAL.wetSand, grass: tintA, dry: PAL.dryGrass, rock: PAL.rock, dark: PAL.darkRock, peak: 0x9a958a };
   for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
     const k = j * s + i, x = isl.x - isl.ext + i * isl.cell, z = isl.z - isl.ext + j * isl.cell, h = H[k];
     pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z; uv[k * 2] = x / 9; uv[k * 2 + 1] = z / 9;
     const hx = H[j * s + Math.min(N, i + 1)] - H[j * s + Math.max(0, i - 1)], hz = H[Math.min(N, j + 1) * s + i] - H[Math.max(0, j - 1) * s + i];
     const slope = Math.hypot(hx, hz) / (2 * isl.cell), n = noise(x * 0.09, z * 0.09);
-    if (h < 0.1) c.set(PAL.wetSand).lerp(c2.set(PAL.abyss), smooth(0.1, -7, h));
-    else if (h < 1.7) c.set(PAL.sand).lerp(c2.set(PAL.wetSand), smooth(0.9, 0.1, h) * 0.8);
+    if (h < 0.1) c.set(P.wet).lerp(c2.set(PAL.abyss), smooth(0.1, -7, h));
+    else if (h < 1.7) c.set(P.sand).lerp(c2.set(P.wet), smooth(0.9, 0.1, h) * 0.8);
     else {
-      c.set(tintA).lerp(c2.set(PAL.dryGrass), n * 0.6);
-      c.lerp(c2.set(PAL.sand), smooth(2.6, 1.7, h));
-      c.lerp(c2.set(isl.kind === 'fort' ? 0x6a4a3c : PAL.rock), smooth(0.45, 0.8, slope));
-      c.lerp(c2.set(PAL.darkRock), smooth(isl.h * 0.8, isl.h * 1.5, h) * 0.75);
-      c.lerp(c2.set(0x9a958a), smooth(isl.h * 1.7, isl.h * 2.4, h) * 0.6);
+      c.set(P.grass).lerp(c2.set(P.dry), n * 0.6);
+      c.lerp(c2.set(P.sand), smooth(2.6, 1.7, h));
+      c.lerp(c2.set(isl.kind === 'fort' ? 0x6a4a3c : P.rock), smooth(0.45, 0.8, slope));
+      c.lerp(c2.set(P.dark), smooth(isl.h * 0.8, isl.h * 1.5, h) * 0.75);
+      c.lerp(c2.set(P.peak), smooth(isl.h * 1.7, isl.h * 2.4, h) * 0.6);
     }
     for (const f of isl.flats) c.lerp(c2.set(PAL.dirt), smooth(f.r, f.r * 0.6, Math.hypot(x - f.x, z - f.z)) * 0.85);
     const v = 0.93 + n * 0.14;
@@ -243,6 +249,17 @@ function fernGeo() { const m = new Mesher(); for (let i = 0; i < 11; i++) { cons
 function deadTreeGeo() { const m = new Mesher(), c = 0x8a8072; m.add(cyl(0.1, 0.32, 5.4, 6), c, [0, 2.7, 0], [0, 0, 0.08]); const br = [[0.9, 4.2, 0, -0.9, 2.6], [-0.7, 3.5, 0.2, 0.8, 2.2], [0.3, 4.9, -0.6, -0.4, 1.9], [-0.5, 5.2, 0.4, 0.5, 1.7], [0.6, 3.0, 0.5, -1.2, 1.5]]; for (const [x, y, z, rz, L] of br) { m.add(cyl(0.03, 0.09, L, 4), c, [x, y, z], [z, 0, rz]); m.add(cyl(0.015, 0.04, L * 0.6, 3), c, [x + Math.sin(-rz) * L * 0.55, y + L * 0.5, z], [z * 2, 0, rz * 0.4]); } return m.build(); }
 function rockGeo() { const m = new Mesher(); m.add(new THREE.DodecahedronGeometry(1, 0), 0x77706a, [0, 0.3, 0], [0.4, 0.2, 0.1], [1, 0.7, 0.85], 0.1); return m.build(); }
 function bushGeo() { const m = new Mesher(); m.add(ball(1), 0x4a6232, [0, 0.45, 0], [0, 0, 0], [1, 0.6, 1], 0.14); m.add(ball(0.7), 0x3c5530, [0.7, 0.35, 0.3], [1, 1, 0], [1, 0.6, 1], 0.14); return m.build(); }
+
+// An active volcano on the island's highest point: a dark crater rim, a lake of lava, and its glow.
+function volcano(isl, g) {
+  let best = -1e9, bx = isl.x, bz = isl.z; const s = N + 1;
+  for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) { const h = isl.grid[j * s + i]; if (h > best) { best = h; bx = isl.x - isl.ext + i * isl.cell; bz = isl.z - isl.ext + j * isl.cell; } }
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(9, 15, 7, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0x1e1816, flatShading: true, side: THREE.DoubleSide }));
+  rim.position.set(bx, best + 2.5, bz); g.add(rim);
+  const lava = new THREE.Mesh(new THREE.CircleGeometry(9, 16).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5a1a, fog: false })); lava.position.set(bx, best + 3.2, bz); g.add(lava);
+  const glow = new THREE.PointLight(0xff6a2a, 40, 120, 1.2); glow.position.set(bx, best + 12, bz); g.add(glow);
+  isl.volcano = { x: bx, y: best + 4, z: bz, lava, glow };
+}
 
 // Hills and mountains on the big islands, reeds in the shallows, dead trees on the cursed ones. Placed last, so nothing else moves.
 function dressScenery(isl, g) {
@@ -683,20 +700,23 @@ export function createWorld(scene) {
     if (isl.kind === 'ruins') ruins(m, isl);
     if (isl.kind === 'crab') crabNest(m, isl);
     if (isl.navy) navyFort(m, isl, g);
+    if (isl.id === 'ember_c') volcano(isl, g);
     dressScenery(isl, g);
     // biomes: jungle, dry scrub, or temperate woods. Away from the ports the forest is dense.
-    const wild = isl.kind === 'town' ? 1 : 3.5;
+    const wild = isl.kind === 'town' ? 1 : isl.region === 'frost' ? 1.3 : isl.region === 'ember' ? 2 : 3.5;
     const dense = (isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1) * wild;
     g.add(m.mesh());
     isl.blocks = isl.colliders.filter((c) => c.r > 1.4).map((c) => ({ x: c.x, z: c.z, r: c.r }));
     dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.12) + 4, 0.2, 60, 0.6, 2.4, 0.62, true), rock, NAT + 'rock_single_B.gltf');
     dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.1), isl.h * 0.8, 200, 2, 5, 0.7, true), rock, NAT + 'rock_single_D.gltf'); // crags up high
-    dressWith(scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35), palm, NAT + 'tree_single_A.gltf');
-    if (isl.r > 100) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
-    if (isl.r > 100 && wild > 1) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.2 * wild), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
-    dressWith(scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0), bush, NAT + 'trees_A_small.gltf');
-    scatter(g, isl, fern, Math.round(isl.r * 0.28 * dense), 1.8, 40, 0.8, 1.5, 0);
-    if (isl.jungle) dressWith(scatter(g, isl, jtree, Math.round(isl.r * 0.42 * wild), 4, isl.h * 1.4, 0.8, 1.5, 0.5), jtree, NAT + 'trees_B_large.gltf');
+    dressWith(scatter(g, isl, palm, Math.round(isl.r * 0.34 * dense), 1.3, 7, 0.8, 1.35, 0.35), palm, NAT + (isl.region === 'ember' ? 'tree_dead_medium' : isl.region === 'frost' ? 'trees_A_medium' : 'tree_single_A') + '.gltf');
+    const ash = isl.region === 'ember'; // the Ember Sea burns: no green, only dead trees and black rock
+    if (!ash && isl.r > 100) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.3 * dense), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
+    if (!ash && isl.r > 100 && wild > 1) dressWith(scatter(g, isl, tree, Math.round(isl.r * 0.2 * wild), 5, isl.h * 0.9, 0.8, 1.5, 0.5), tree, NAT + 'trees_A_medium.gltf');
+    if (!ash) dressWith(scatter(g, isl, bush, Math.round(isl.r * 0.22 * dense), 2, 30, 0.6, 1.3, 0), bush, NAT + 'trees_A_small.gltf');
+    if (!ash) scatter(g, isl, fern, Math.round(isl.r * 0.28 * dense), 1.8, 40, 0.8, 1.5, 0);
+    if (ash) { dressWith(scatter(g, isl, dead, Math.round(isl.r * 0.5), 1.5, isl.h * 1.3, 0.9, 1.7, 0.3), dead, NAT + 'tree_dead_medium.gltf'); dressWith(scatter(g, isl, rock, Math.round(isl.r * 0.18), 0.4, isl.h * 1.6, 1, 3, 0.7, true), rock, NAT + 'rock_single_E.gltf'); }
+    if (isl.jungle && !ash) dressWith(scatter(g, isl, jtree, Math.round(isl.r * 0.42 * wild), 4, isl.h * 1.4, 0.8, 1.5, 0.5), jtree, NAT + 'trees_B_large.gltf');
     if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') scatter(g, isl, dead, 8, 1.5, 40, 0.8, 1.4, 0.3);
     if (isl.caveAt) { const c = isl.caveAt, cy = heightAt(c.x, c.z), k = new Kit(KINDS); // cave mouth
       for (const [dx, sc] of [[-2.6, 2.6], [2.6, 2.8], [0, 2.2]]) k.add(new THREE.DodecahedronGeometry(1, 0), PAL.darkRock, [c.x + dx, cy + (dx ? 1.6 : 4.4), c.z], [dx, dx * 2, 0.3], [sc, dx ? sc * 1.3 : 1.4, sc], 0.1, 'plain');

@@ -461,3 +461,9 @@ particles and sharpness.
 - **Fort Regal** now stands on raised ground above its surroundings.
 - **Pistols.** No auto-aim: the shot goes where the line points. Enemy marksmen and enemy gun crews are poor shots at low rank and sharpen as the captain rises.
 - **Ship ride.** The hull sits on the highest wave under it and pitches with the swell, so water no longer washes over the deck; the wake is emitted astern of the hull.
+
+## 17. The seas beyond the gates (build 0.9)
+
+- **Gates.** The Ember Gate (The Hunter chart) lies south-west of Saltmere; the Frost Gate (The Wolf chart) south-east of Port Regal. Sail the chart's three stars in order to open a gate; sail through to cross. A gate on the far side leads home. Crossing leaves the old sea's ships behind.
+- **Ember Sea.** Black sand, ash slopes and dead trees. Emberwake Isle has an active volcano: it smokes, and erupts every 80 to 140 seconds, raining lava bombs into the sea and bringing an ash storm. Ash Cultists hold the islands; Ember Raiders (fire shot) patrol in numbers; the Ash Wyrm rises near Serpent Rock.
+- **Frost Sea.** Snow and glacier ground, white peaks, constant snowfall; storms bring heavy snow. Frost Raiders and a Frost Giant on every island; polar bears, wolves and white hares; the Yeti guards the heights of Stormhold. Ice Reavers patrol with chain shot.

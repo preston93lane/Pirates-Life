@@ -13,6 +13,8 @@ const KIND = {
   goat: { s: 0.85, fur: 0xd8d2c4, belly: 0xc0b8a8, speed: 3.6, flee: true, hp: 0, horn: true },
   rabbit: { s: 0.3, fur: 0xb8a68a, belly: 0xe2d8c2, speed: 4.8, flee: true, hp: 0, ears: 1.8 },
   wolf: { s: 0.95, fur: 0x6a6660, belly: 0xa8a29a, speed: 4.6, flee: false, hp: 40, dmg: 12, reach: 1.8 },
+  polar: { s: 1.6, fur: 0xeef2f4, belly: 0xdfe6ea, speed: 3.2, flee: false, hp: 100, dmg: 24, reach: 2.7 },
+  hare: { s: 0.3, fur: 0xf2f5f7, belly: 0xe6ecf0, speed: 5, flee: true, hp: 0, ears: 1.8 },
   bear: { s: 1.5, fur: 0x4a3626, belly: 0x6a5238, speed: 3.0, flee: false, hp: 90, dmg: 22, reach: 2.6 },
 };
 // which animals an island of each biome has, and how many per 100 units of radius
@@ -20,6 +22,8 @@ const BIOME = {
   temperate: [['deer', 2], ['boar', 1.5], ['rabbit', 2], ['goat', 0.6], ['wolf', 0.6]],
   jungle: [['boar', 2], ['bear', 0.4], ['wolf', 0.5], ['rabbit', 1]],
   dry: [['goat', 1.5], ['rabbit', 1.5], ['wolf', 0.3]],
+  frost: [['polar', 0.9], ['wolf', 1.1], ['hare', 1.5]],
+  ember: [['boar', 1], ['wolf', 0.6]],
 };
 
 function build(kind) {
@@ -39,12 +43,12 @@ function build(kind) {
   else if (kind === 'deer') for (const sx of [-1, 1]) { head.add(new THREE.Mesh(box(0.04 * s, 0.32 * s, 0.04 * s).translate(sx * 0.12 * s, 0.32 * s, -0.04 * s).rotateZ(sx * 0.4), mat(0x5a3e24))); }
   else if (K.horn) for (const sx of [-1, 1]) head.add(new THREE.Mesh(cone(0.03 * s, 0.14 * s, 4).translate(sx * 0.08 * s, 0.22 * s, 0.05 * s), mat(0x8a7a5a)));
   else if (K.tusk) for (const sx of [-1, 1]) head.add(new THREE.Mesh(cone(0.03 * s, 0.14 * s, 4).rotateX(-0.6).translate(sx * 0.1 * s, -0.08 * s, 0.25 * s), mat(0xe9e0c8)));
-  else if (kind === 'wolf' || kind === 'bear') { head.add(new THREE.Mesh(cone(0.04 * s, 0.1 * s, 4).translate(0.07 * s, 0.2 * s, -0.02 * s), mat(K.fur))); head.add(new THREE.Mesh(cone(0.04 * s, 0.1 * s, 4).translate(-0.07 * s, 0.2 * s, -0.02 * s), mat(K.fur))); }
+  else if (kind === 'wolf' || kind === 'bear' || kind === 'polar') { head.add(new THREE.Mesh(cone(0.04 * s, 0.1 * s, 4).translate(0.07 * s, 0.2 * s, -0.02 * s), mat(K.fur))); head.add(new THREE.Mesh(cone(0.04 * s, 0.1 * s, 4).translate(-0.07 * s, 0.2 * s, -0.02 * s), mat(K.fur))); }
   // tail
   const tail = new THREE.Group(); tail.position.set(0, 1.05 * s, -bodyLen * 0.5); body.add(tail); root.userData.tail = tail;
   tail.add(new THREE.Mesh(box(0.08 * s, 0.08 * s, 0.3 * s).translate(0, 0, -0.15 * s), mat(K.belly)));
   // four legs on hip joints, long for the deer and short for the boar
-  const legH = (kind === 'boar' || kind === 'wolf' ? 0.55 : kind === 'bear' ? 0.6 : 0.8) * s;
+  const legH = (kind === 'boar' || kind === 'wolf' ? 0.55 : kind === 'bear' || kind === 'polar' ? 0.6 : 0.8) * s;
   for (const [x, z] of [[-0.18, 0.36], [0.18, 0.36], [-0.18, -0.36], [0.18, -0.36]].map(([a, b]) => [a * s, b * s * (bodyLen / 1)])) {
     const hip = new THREE.Group(); hip.position.set(x, 0.85 * s, z); body.add(hip);
     hip.add(new THREE.Mesh(box(0.12 * s, legH, 0.12 * s).translate(0, -legH / 2, 0), mat(K.fur)));

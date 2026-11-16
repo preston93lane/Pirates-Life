@@ -151,7 +151,7 @@ export function createLand(game) {
     const raidReady = now - s.raidAt > 20 * 60000; s.navyRaid = s.navyRaid || {}; const navyCold = now - (s.navyRaid[isl.id] || 0) < 30 * 60000; land.fortWarned = false;
     isl.spawns.forEach((sp, i) => {
       if (isl.cleared[i] && now - isl.cleared[i] < 10 * 60000) return;
-      if (sp.foe === 'crabking' && s.bosses.crabking && now - s.bosses.crabking < 20 * 60000) return;
+      if (FOES[sp.foe] && FOES[sp.foe].boss && s.bosses[sp.foe] && now - s.bosses[sp.foe] < 20 * 60000) return;
       if (isl.kind === 'fort' && !raidReady) return;
       if (sp.navy && navyCold) return;
       const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl * (sp.navy ? 1.45 : sp.wild ? 1.25 : 1)); a.spawnI = i; a.grp = sp.navy ? 'navy' : isl.kind === 'fort' ? 'fort' : null;

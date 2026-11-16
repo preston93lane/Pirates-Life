@@ -3,11 +3,11 @@
 import * as THREE from 'three';
 import { LIM, WORLD_R, CHARTS } from './data.js';
 import { heightAt } from './world.js';
-import { dist2 } from './util.js';
+import { dist2, rand } from './util.js';
 
 const GATES = [
   { id: 'ember', chart: 'hunter', at: { x: -1000, z: 700 }, far: { x: -2250, z: 1520 }, limit: 3600, name: 'The Ember Gate' },
-  { id: 'frost', chart: 'wolf', at: { x: 1150, z: -1000 }, far: { x: 2600, z: 1950 }, limit: 3600, name: 'The Frost Gate' },
+  { id: 'frost', chart: 'wolf', at: { x: 1000, z: -900 }, far: { x: 2600, z: 1950 }, limit: 3600, name: 'The Frost Gate' },
 ];
 const STAR_GAP = 150;
 const starMat = new THREE.MeshBasicMaterial({ color: 0xffe9a0, fog: false });
@@ -44,8 +44,31 @@ export function createSeas(game) {
       }
       if (st.open && dist2(p.x, p.z, G.g.at.x, G.g.at.z) < 42 && !sea.passing) sea.pass(G.g, 'to');
     }
+    // the weather of each sea: ash and a living volcano in the Ember Sea, falling snow in the Frost Sea
+    if (sea.region) regionWeather(dt, p);
     // the far gates lead home, and are always open
     if (sea.region) { const G = sea.region; if (dist2(p.x, p.z, G.far.x, G.far.z) < 42 && !sea.passing) sea.pass(G, 'home'); }
+  }
+  let smokeT = 0, eruptT = 25;
+  function regionWeather(dt, p) {
+    const fx = game.fx, c = game.camera.position, id = sea.region.id;
+    if (id === 'frost') { for (let i = 0; i < 3; i++) fx.emit(c.x + rand(-40, 40), c.y + rand(4, 22), c.z + rand(-40, 40), { color: 0xf4f8fa, speed: 0, dir: [2, -5, 1], life: 3.5, size: 0.42, alpha: 0.85, spread: 0 }); return; }
+    if (id !== 'ember') return;
+    if (Math.random() < 0.6) fx.emit(c.x + rand(-40, 40), c.y + rand(4, 22), c.z + rand(-40, 40), { color: 0x4a443e, speed: 0, dir: [2, -6, 1], life: 3, size: 0.35, alpha: 0.7, spread: 0 });
+    const v = game.world.byId.ember_c && game.world.byId.ember_c.volcano; if (!v) return;
+    v.glow.intensity = 34 + Math.sin(game.time * 3) * 10;
+    smokeT -= dt; if (smokeT <= 0) { smokeT = 0.35; fx.smoke(v.x + rand(-3, 3), v.y + 2, v.z + rand(-3, 3), [0.05, 0.3, 0.02], 4); }
+    eruptT -= dt;
+    if (eruptT <= 0) { // an eruption: fire from the crater, lava bombs into the sea round you, and the sky turns to ash
+      eruptT = rand(80, 140);
+      game.toast('Emberwake erupts! Lava falls from the sky. An ash storm is coming.', 'warn'); game.shake(1.2);
+      for (let i = 0; i < 6; i++) { fx.fire(v.x + rand(-6, 6), v.y + rand(2, 10), v.z + rand(-6, 6), 8); fx.smoke(v.x, v.y + 4, v.z, [rand(-0.3, 0.3), 1, rand(-0.3, 0.3)], 12); }
+      for (let i = 0; i < 6; i++) {
+        const a = rand(0, Math.PI * 2), d = rand(30, 140), x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d;
+        setTimeout(() => { fx.splash(x, z, 1.6); fx.fire(x, 1, z, 6); if (dist2(p.x, p.z, x, z) < 16) game.sea.damage(p, 18, null, p.x, 3, p.z, 'fire'); }, 400 + i * 350);
+      }
+      if (!game.sea.event) game.sea.startEvent('storm');
+    }
   }
   sea.pass = (g, dir) => {
     sea.passing = true;
@@ -53,9 +76,10 @@ export function createSeas(game) {
       const p = game.sea.player;
       if (dir === 'to') { LIM.r = g.limit; sea.region = g; p.x = g.far.x + 60; p.z = g.far.z; game.toast(`You pass through ${g.name}. The sea here is strange and unmapped.`, 'warn'); }
       else { LIM.r = WORLD_R; sea.region = null; p.x = game.world.byId.saltmere.anchor.x; p.z = game.world.byId.saltmere.anchor.z; game.toast('You come home through the gate.', 'gold'); }
+      for (const sh of game.sea.ships) sh.gone = true; // the ships of the sea you left stay behind
       p.speed = 0; p.sail = 0; p.heading = 0;
       setTimeout(() => { sea.passing = false; }, 2500);
     });
   };
-  return { update, gates, get region() { return sea.region; } };
+  return { update, gates, get region() { return sea.region; }, erupt() { eruptT = 0; } };
 }
