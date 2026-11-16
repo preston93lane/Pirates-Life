@@ -5,7 +5,7 @@ import { ISLANDS, WORLD_R, BUILDINGS } from './data.js';
 import { fbm, noise, smooth, lerp, clamp, rng, WAVES, TAU, SEA } from './util.js';
 import { Mesher, Kit, MAT, box, cyl, cone, ball, groundMat, setGlow } from './geo.js';
 import { staticFigure } from './character.js';
-import { loadGltf } from './models.js';
+import { loadGltf, placeModel } from './models.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const NAT = 'medieval/nature/';
 
@@ -236,6 +236,16 @@ function fernGeo() { const m = new Mesher(); for (let i = 0; i < 11; i++) { cons
 function deadTreeGeo() { const m = new Mesher(), c = 0x8a8072; m.add(cyl(0.1, 0.32, 5.4, 6), c, [0, 2.7, 0], [0, 0, 0.08]); const br = [[0.9, 4.2, 0, -0.9, 2.6], [-0.7, 3.5, 0.2, 0.8, 2.2], [0.3, 4.9, -0.6, -0.4, 1.9], [-0.5, 5.2, 0.4, 0.5, 1.7], [0.6, 3.0, 0.5, -1.2, 1.5]]; for (const [x, y, z, rz, L] of br) { m.add(cyl(0.03, 0.09, L, 4), c, [x, y, z], [z, 0, rz]); m.add(cyl(0.015, 0.04, L * 0.6, 3), c, [x + Math.sin(-rz) * L * 0.55, y + L * 0.5, z], [z * 2, 0, rz * 0.4]); } return m.build(); }
 function rockGeo() { const m = new Mesher(); m.add(new THREE.DodecahedronGeometry(1, 0), 0x77706a, [0, 0.3, 0], [0.4, 0.2, 0.1], [1, 0.7, 0.85], 0.1); return m.build(); }
 function bushGeo() { const m = new Mesher(); m.add(ball(1), 0x4a6232, [0, 0.45, 0], [0, 0, 0], [1, 0.6, 1], 0.14); m.add(ball(0.7), 0x3c5530, [0.7, 0.35, 0.3], [1, 1, 0], [1, 0.6, 1], 0.14); return m.build(); }
+
+// Hills and mountains on the big islands, reeds in the shallows, dead trees on the cursed ones. Placed last, so nothing else moves.
+function dressScenery(isl, g) {
+  const rnd = Math.random, hi = isl.h > 20;
+  const hills = hi ? ['hills_A_trees', 'hills_B_trees', 'mountain_A_grass_trees', 'mountain_B_grass_trees'] : ['hill_single_A', 'hill_single_B', 'hills_A_trees'];
+  const n = Math.round(isl.r / 90);
+  for (let i = 0; i < n; i++) { const p = isl.spot(2, isl.h * 0.9, 14); placeModel(g, NAT + hills[Math.floor(rnd() * hills.length)] + '.gltf', p.x, heightAt(p.x, p.z) - 0.3, p.z, rnd() * TAU, (isl.r / 240) * (0.8 + rnd() * 0.4)); }
+  for (let i = 0; i < Math.round(isl.r / 35); i++) { const p = isl.spot(-1.4, 0.4, 8); placeModel(g, NAT + (rnd() < 0.5 ? 'waterplant_A' : 'waterlily_A') + '.gltf', p.x, heightAt(p.x, p.z) - 0.15, p.z, rnd() * TAU, 1.1 + rnd() * 0.6); }
+  if (isl.kind === 'ruins' || isl.kind === 'islet' || isl.kind === 'crab') for (let i = 0; i < 4; i++) { const p = isl.spot(1.5, 30, 12); placeModel(g, NAT + 'tree_dead_medium.gltf', p.x, heightAt(p.x, p.z) - 0.1, p.z, rnd() * TAU, 1.1); }
+}
 
 // Swap a scatter's procedural shape for a real model, keeping its size and every position. Used once the file has loaded.
 function dressWith(mesh, procGeo, file) {
@@ -625,6 +635,7 @@ export function createWorld(scene) {
     if (isl.kind === 'ruins') ruins(m, isl);
     if (isl.kind === 'crab') crabNest(m, isl);
     if (isl.navy) navyFort(m, isl, g);
+    dressScenery(isl, g);
     const dense = isl.jungle ? 1.5 : isl.kind === 'crab' || isl.kind === 'islet' ? 0.5 : 1;
     g.add(m.mesh());
     isl.blocks = isl.colliders.filter((c) => c.r > 1.4).map((c) => ({ x: c.x, z: c.z, r: c.r }));

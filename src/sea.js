@@ -65,6 +65,9 @@ export function createSea(game) {
     const lv = game.save.level, count = (f) => sea.ships.filter((s) => s.alive && s.faction === f).length;
     if (count('merchant') < 2) sea.spawn('merchant');
     if (count('pirate') < (lv >= 5 ? 3 : 2)) sea.spawn(lv >= 3 && Math.random() < 0.4 ? 'pirate2' : 'pirate');
+    // fleets: from rank 3 a pirate gang can sail as three, and once you're wanted the navy patrols in pairs
+    if (lv >= 3 && count('pirate') < 3 && Math.random() < 0.012) { const pos = openWater(sea.player.x, sea.player.z, 420, 640); if (pos) { sea.spawn('pirate2', pos); sea.spawn('pirate', { x: pos.x + 22, z: pos.z + 10 }); sea.spawn('pirate', { x: pos.x - 18, z: pos.z + 20 }); game.toast('A pirate fleet of three is out on the water.', 'warn'); } }
+    if (game.save.rep.navy <= -20 && count('navy') < 2 && Math.random() < 0.01) { const pos = openWater(sea.player.x, sea.player.z, 420, 640); if (pos) { sea.spawn('navy', pos); sea.spawn('navy', { x: pos.x + 20, z: pos.z - 16 }); game.toast('A navy patrol of two has your scent.', 'warn'); } }
     if (count('navy') < (game.save.rep.navy <= -20 ? 2 : 1)) { const r = ISLANDS.find((i) => i.id === 'regal'), pos = openWater(r.x, r.z, 280, 520); if (pos && dist2(pos.x, pos.z, sea.player.x, sea.player.z) > 300) sea.spawn(lv >= 6 && Math.random() < 0.5 ? 'navy2' : 'navy', pos); }
     if (game.save.rep.navy <= -60 && !sea.ships.some((s) => s.alive && s.hunter)) { sea.hunterT = (sea.hunterT ?? 20) - 2.5; if (sea.hunterT <= 0) { const pos = openWater(sea.player.x, sea.player.z, 460, 680); if (pos && sea.spawn('hunter', pos)) { sea.hunterT = 100; game.toast('A navy hunter has your scent. She outguns you.', 'warn'); } } }
     const bt = game.save.bounty;
