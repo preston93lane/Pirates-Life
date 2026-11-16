@@ -452,3 +452,12 @@ particles and sharpness.
 - **Skill tree.** Three constellations (Blade and Pistol, The Sea, Captaincy). Each starts at one star and forks. Deeper stars cost more points. 3 points per rank.
 - **Characters.** Faces, rounded joints, breathing and weight-shift when idle, hip roll and counter-twist when running. Torch is carried in the off hand. Hold SHOOT to aim the pistol, release to fire.
 - **Fixes.** Released ships cannot be robbed twice. Boulder collision matches the rock. Fewer ships at sea. Nothing is planted inside a boulder or wall.
+
+## 16. Taverns you walk into, townsfolk, fort alarms (build 0.8)
+
+- **Tavern interior.** The tavern door leads to a room: the keeper behind the bar (jobs, bounties, drink, stores), hands for hire standing along the wall, three gaming tables and the arm wrestler by the fire. Each is a tap-to-talk spot.
+- **Townsfolk favours.** Widow Corrin (Saltmere), Dr. Ambrose Pell (Port Regal) and Rook (Black Shoals) each give a short chain that leans on the main story: Bloodwater, the walking dead and the Drowned Queen, Poseidon, and Fort Regal.
+- **Fort alarm.** Wake one defender of a fort and the whole garrison comes.
+- **Fort Regal** now stands on raised ground above its surroundings.
+- **Pistols.** No auto-aim: the shot goes where the line points. Enemy marksmen and enemy gun crews are poor shots at low rank and sharpen as the captain rises.
+- **Ship ride.** The hull sits on the highest wave under it and pitches with the swell, so water no longer washes over the deck; the wake is emitted astern of the hull.

@@ -126,7 +126,7 @@ game.playerFell = () => setTimeout(() => fade(() => {
     const e = game.land.boarding.enemy, p = game.sea.player; game.land.leave(); game.mode = 'sea';
     p.hp = Math.max(10, p.hp - p.maxHp * 0.25); [p.x, p.z] = p.at(0, -120); e.provoked = true;
     game.toast(`Your crew drags you back aboard and cuts the lines. Lost ${loss} gold.`, 'warn');
-  } else { game.land.enter(game.land.isl); game.toast(`You wake on the beach, lighter by ${loss} gold.`, 'warn'); }
+  } else { game.world.tavern = false; game.land.enter(game.land.isl); game.toast(`You wake on the beach, lighter by ${loss} gold.`, 'warn'); }
 }), 1700);
 game.playerSunk = () => setTimeout(() => fade(() => {
   if (game.mode === 'deck') { game.land.leave(); game.mode = 'sea'; }
@@ -205,7 +205,7 @@ function soundscape(dt) {
   moodT -= dt; if (moodT > 0) return; moodT = 1.2;
   const sea = game.sea, land = game.land, m = game.mode, t = sea.target;
   const fight = m === 'board' || sea.kraken || (m !== 'sea' && m !== 'deck' && land.player && land.player.combat > 0) || ((m === 'sea' || m === 'deck') && t && t.def && (t.provoked || t.hunter) && !t.surrendered);
-  audio.mood(fight ? 'battle' : m === 'land' && land.isl && land.isl.kind === 'town' && !land.cave ? 'town' : game.world.night > 0.6 || land.cave ? 'night' : 'sail');
+  audio.mood(fight ? 'battle' : m === 'land' && land.isl && land.isl.kind === 'town' && (!land.cave || land.cave.tavern) ? 'town' : game.world.night > 0.6 || land.cave ? 'night' : 'sail');
   if ((m === 'sea' || m === 'deck') && Math.random() < 0.22) audio.creak();
   if (game.world.night < 0.3 && !land.cave && Math.random() < 0.07) audio.gull();
 }
@@ -229,7 +229,7 @@ function frame(now) {
     if (input.take('menu')) game.ui.openMenu();
     if (input.take('cmd')) game.ui.openMenu('Command');
     for (const k of ['even', 'sails', 'guns', 'repair']) if (input.take('stn_' + k)) game.orderStation(k);
-    game.fx.dim = game.world.cave ? 0.4 : 1 - 0.45 * game.world.night;
+    game.fx.dim = game.world.tavern ? 0.8 : game.world.cave ? 0.4 : 1 - 0.45 * game.world.night;
     if (game.mode === 'sea') { input.pressed.skill = input.pressed.bomb = false; }
     if (game.mode !== 'sea') { input.pressed.sailUp = input.pressed.sailDown = input.pressed.ammo = input.pressed.swivel = false; }
     game.ui.update(raw); soundscape(raw);

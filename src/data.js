@@ -300,3 +300,20 @@ export const TREE = {
   ransom: { b: 'cap', name: "King's Ransom", x: 75, y: 3, req: 'powder', need: 1, cost: [3, 4], gives: { plunder: 2 }, desc: '+8% gold from ships per rank.' },
 };
 export const POINTS_PER_RANK = 3;
+
+// ----- townsfolk with troubles of their own. Each has a short chain that leans on the main story. -----
+export const FOLK = [
+  { id: 'widow', isl: 'saltmere', name: 'Widow Corrin', role: "Fisherman's widow", look: 'keeper', at: [15, -9], steps: [
+    { say: "Bloodwater took my husband's boat off Gull Rock, and him with it. Their red sails still hunt those waters. Send three of them down, Captain, and I might sleep again.", obj: { type: 'sink', faction: 'pirate', n: 3 }, reward: { gold: 260, xp: 120 }, done: 'Three. He would have liked you. Take this; it was his.' },
+    { say: 'They keep what they steal in the vault at Bloodwater Hold, south-east of here. Break it open. Keep the gold. I only want them to know what loss is.', obj: { type: 'raid', island: 'blood' }, reward: { gold: 450, xp: 260, rum: 2 }, done: 'Then it is done. Saltmere will remember your name kindly, whatever the navy calls you.' },
+  ] },
+  { id: 'scholar', isl: 'regal', name: 'Dr. Ambrose Pell', role: 'Scholar of the Royal Society', look: 'merchant', at: [3, 7], steps: [
+    { say: 'You are the one who has seen the dead walk on the Isle of Bones? Splendid. I need to know they can be stopped. Put eight of them down and tell me how they fell.', obj: { type: 'kill', foe: 'skeleton', n: 8 }, reward: { gold: 320, xp: 160 }, done: 'They fall like men. Remarkable. Then whatever raised them can be ended too.' },
+    { say: 'The Drowned Queen was a navy flagship, lost with all hands in the Reach. I believe she is why the dead will not lie still. Sink her, far to the south, and bring me word.', obj: { type: 'boss', boss: 'ghost' }, reward: { gold: 900, xp: 500, iron: 40 }, done: 'Her log speaks of an oath sworn to something older than the Crown. Older than the sea lanes.' },
+    { say: "The oath was sworn to the sea itself. Sailors call him Poseidon; his throne lies in the south-west deeps. No one has stood against him and lived. I would not ask it of you. I am asking.", obj: { type: 'boss', boss: 'poseidon' }, reward: { gold: 2000, xp: 1000 }, done: 'You faced a god and came back to tell an old man about it. The Society will never believe me.' },
+  ] },
+  { id: 'rook', isl: 'shoals', name: 'Rook', role: 'Smuggler', look: 'brigand', at: [8, -1], steps: [
+    { say: 'Navy brigs sit across our runs like cats at a mousehole. Two fewer would make for a quieter month. Nobody here will ask how.', obj: { type: 'sink', faction: 'navy', n: 2 }, reward: { gold: 520, xp: 220 }, done: 'Quiet water tonight. Drinks are on the Shoals.' },
+    { say: "The navy keeps its pay chest in the strongroom at Fort Regal, up on the hill behind the town. It is the hardest nut in these islands. Crack it and every free captain will know your name.", obj: { type: 'raid', island: 'regal' }, reward: { gold: 1200, xp: 600, iron: 60 }, done: "Ha! You mad devil. They will be telling that one when we're both bones." },
+  ] },
+];

@@ -152,7 +152,7 @@ export function createSea(game) {
       if (t.speed) { const ft = d / (MUZZLE_V * 0.96); tx += t.fx * t.speed * ft; tz += t.fz * t.speed * ft; d = dist2(m.x, m.z, tx, tz); }
       ang = q.out + clamp(angleDiff(q.out, Math.atan2(tx - m.x, tz - m.z)), -0.5, 0.5);
     }
-    const spread = sh.isPlayer ? (q.dbl ? 0.05 : 0.022) : 0.05;
+    const spread = sh.isPlayer ? (q.dbl ? 0.05 : 0.022) : clamp(0.1 - 0.0075 * (game.save.level - 1), 0.035, 0.1); // green gun crews miss a lot; veterans do not
     ang += rand(-spread, spread);
     const el = 0.5 * Math.asin(clamp((G * d) / (MUZZLE_V * MUZZLE_V), 0, 0.9)) + rand(-0.006, 0.01) + (m.y > 2 ? -Math.atan2(m.y - 1.5, d) * 0.6 : 0);
     const dx = Math.sin(ang), dz = Math.cos(ang), ce = Math.cos(el);
@@ -650,7 +650,7 @@ export function createSea(game) {
     // wakes
     const cam = game.camera.position;
     for (const s of [p, ...sea.ships]) if (s.alive && s.speed > 2.5 && dist2(s.x, s.z, cam.x, cam.z) < 380 && Math.random() < s.speed * dt * 1.6) {
-      const [wx, wz] = s.at(rand(-1, 1) * s.cls.beam * 0.3, -s.cls.len * 0.5); fx.wake(wx, wz, s.cls.beam / 5);
+      const [wx, wz] = s.at(rand(-1, 1) * s.cls.beam * 0.22, -s.cls.len * 0.56 - 1.2); fx.wake(wx, wz, s.cls.beam / 8);
       if (Math.random() < 0.5) { const [bx, bz] = s.at(rand(-1, 1) * 1.2, s.cls.len * 0.46); fx.emit(bx, 0.6, bz, { n: 1, color: 0xf2f6f2, speed: 2.5, up: 2, gravity: 9, life: 0.7, size: 0.9, grow: 1, alpha: 0.7, spread: 1 }); }
     }
     for (const s of sea.ships) if (s.alive && s.hp < s.maxHp * 0.42 && Math.random() < dt * 6) fx.fire(s.x + rand(-2, 2), s.model.deckY + 1.5, s.z + rand(-2, 2), 2);

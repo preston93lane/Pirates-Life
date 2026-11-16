@@ -1,5 +1,5 @@
 // Story chain and tavern jobs. Both are driven by events the rest of the game emits.
-import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION, DAILY, DEEDS, BOUNTIES } from './data.js';
+import { STORY, ISLAND, ISLANDS, ZONES, GOODS, FOES, PORT_FACTION, DAILY, DEEDS, BOUNTIES, FOLK } from './data.js';
 import { cargoUsed, shipStats, addRep } from './state.js';
 import { pick, rand, dist2 } from './util.js';
 
@@ -17,7 +17,7 @@ export function createQuests(game) {
       case 'dig': return evt === 'dig' && d.island === obj.island;
       case 'build': return evt === 'build' && d.building === obj.building;
       case 'kill': return evt === 'kill' && d.foe === obj.foe && ++holder.n >= obj.n;
-      case 'raid': return evt === 'raid';
+      case 'raid': return evt === 'raid' && (!obj.island || d.island === obj.island);
       case 'boss': return evt === 'boss' && d.boss === obj.boss;
       case 'deliver': if (evt === 'talk' && d.npc === `${obj.to}:tavern` && S().questCargo >= obj.n) { S().questCargo -= obj.n; return true; } return false;
       case 'yield': return evt === 'yield';
@@ -78,6 +78,8 @@ export function createQuests(game) {
       q.on('bounty', {});
     }
     for (const d2 of DEEDS) if (!s.deeds[d2.id] && !told[d2.id] && d2.stat(s) >= d2.goal) { told[d2.id] = true; game.toast(`Deed done: ${d2.name}. Claim it in Menu, Deeds.`, 'gold'); }
+    // favours asked by townsfolk
+    for (const f of FOLK) { const st = s.folk[f.id]; if (st && st.on && !st.ready && matches(f.steps[st.i].obj, evt, d, st)) { st.ready = true; game.toast(`Done. ${f.name} in ${ISLAND[f.isl].name} will want to hear of it.`, 'gold'); } }
     for (const job of s.jobs.slice()) if (matches(job.obj, evt, d, job)) { s.jobs.splice(s.jobs.indexOf(job), 1); game.reward(job.reward, `Job done: ${job.title}`); for (const f in job.rep || {}) addRep(s, f, job.rep[f]); }
     game.ui.dirty = true;
   };
@@ -92,14 +94,19 @@ export function createQuests(game) {
       case 'build': return `Build a ${{ lumber: 'Lumber Camp' }[o.building] || o.building} at Rogue's Rest`;
       case 'deliver': return `Deliver ${o.n} ${GOODS[o.good].name.toLowerCase()} to the ${ISLAND[o.to].name} tavern`;
       case 'kill': return `Slay ${o.n} ${FOES[o.foe].name}${o.island ? ` on ${ISLAND[o.island].name}` : ''}`;
-      case 'raid': return 'Break open the vault at Bloodwater Hold';
-      case 'boss': return { crabking: 'Kill the Crab King on Crabclaw Key', ghost: 'Sink the Drowned Queen in the Drowned Reach', kraken: 'Destroy the Kraken in The Maw' }[o.boss];
+      case 'raid': return o.island === 'regal' ? 'Break open the strongroom at Fort Regal' : 'Break open the vault at Bloodwater Hold';
+      case 'boss': return { crabking: 'Kill the Crab King on Crabclaw Key', ghost: 'Sink the Drowned Queen in the Drowned Reach', kraken: 'Destroy the Kraken in The Maw', poseidon: "Defeat Poseidon at his Throne, far to the south-west" }[o.boss];
       case 'yield': return 'Make a ship strike her colours';
       case 'bounty': return 'Take a bounty poster at a tavern and collect on it';
       default: return 'Sail where you please';
     }
   }
   q.shortText = shortText; q.progress = progress;
+  // townsfolk favours: one step at a time, taken and handed in by talking to them
+  q.folk = (id) => { const s = S(), f = FOLK.find((x) => x.id === id), st = s.folk[id] || { i: 0, on: false, ready: false, n: 0 }; return { f, st, step: f.steps[st.i], over: st.i >= f.steps.length }; };
+  q.folkAccept = (id) => { const s = S(), { st } = q.folk(id); s.folk[id] = Object.assign(st, { on: true, ready: false, n: 0 }); };
+  q.folkClaim = (id) => { const s = S(), { f, st, step } = q.folk(id); if (!st.ready) return; game.reward(step.reward, `${f.name} is grateful`); addRep(s, PORT_FACTION[f.isl], 6); s.folk[id] = { i: st.i + 1, on: false, ready: false, n: 0 }; };
+  q.folkActive = () => FOLK.filter((f) => S().folk[f.id] && S().folk[f.id].on).map((f) => { const st = S().folk[f.id], o = f.steps[st.i].obj; return { name: f.name, port: ISLAND[f.isl].name, text: st.ready ? `Return to ${f.name} in ${ISLAND[f.isl].name}` : shortText(o) + progress(o, st.n) }; });
 
   // where the compass should point
   q.marker = () => {

@@ -139,7 +139,7 @@ export function createUI(game) {
     c.fillStyle = '#e6dcc2'; c.font = '700 20px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText('N', Z / 2, 24);
     // place name
     let name = 'Open sea';
-    if (game.mode === 'board') name = 'Boarding'; else if (game.mode === 'deck') name = 'On deck'; else if (game.land.cave) name = 'Cave';
+    if (game.mode === 'board') name = 'Boarding'; else if (game.mode === 'deck') name = 'On deck'; else if (game.land.cave) name = game.land.cave.tavern ? 'Tavern' : 'Cave';
     else if (onFoot && game.land.isl) name = game.land.isl.name;
     else { const n = nearestIsland(me.x, me.z); if (n.d < 220 && S().seen[n.isl.id]) name = n.isl.name; else if (sea.zone) name = ZONES[sea.zone].name; }
     el.place.textContent = name;
@@ -153,16 +153,24 @@ export function createUI(game) {
   const rewardText = (r) => [r.gold && `${r.gold} gold`, r.xp && `${r.xp} infamy`, r.timber && `${r.timber} timber`, r.iron && `${r.iron} iron`].filter(Boolean).join(' · ');
 
   const VIEWS = {
+    folk: {
+      tabs: [],
+      main(p) {
+        const { f, st, step, over } = game.quests.folk(p.npc.folk);
+        if (over) return `<p>"${esc(f.steps[f.steps.length - 1].done)}"</p><p class="note">${esc(f.name)} has nothing more to ask of you, for now.</p>`;
+        const prev = st.i > 0 && !st.on ? `<p>"${esc(f.steps[st.i - 1].done)}"</p>` : '';
+        if (st.ready) return `<p>"${esc(step.done)}"</p><p>${btn(`Take your reward: ${rewardText(step.reward)}`, 'folkclaim', f.id, 'go')}</p>`;
+        if (st.on) return `<p>"${esc(step.say)}"</p><p class="note">In hand: ${esc(game.quests.shortText(step.obj) + game.quests.progress(step.obj, st.n))}</p>`;
+        return `${prev}<p>"${esc(step.say)}"</p><p class="note">${esc(game.quests.shortText(step.obj))} · Reward: ${rewardText(step.reward)}</p><p>${btn('I will see it done', 'folkyes', f.id, 'go')} ${btn('Not now', 'closepanel')}</p>`;
+      },
+    },
     tavern: {
       tabs: ['Jobs', 'Hands', 'Games', 'Bounties', 'Bar'],
       Games() {
         const s = S(), g = ui.g, die = (n) => `<span class="die">${'⚀⚁⚂⚃⚄⚅'[n - 1]}</span>`, FACE = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
         const stakes = (k) => [10, 50, 250].map((b) => btn(`${b} gold`, 'play', `${k}:${b}`, 'go', s.gold < b)).join(' ');
-        if (!g) return '<p>A corner table, a guttering candle, and people who would love your money.</p>'
-          + row("Liar's Dice", 'Five dice each, hidden under a cup. Bid how many of a face are on the table in all. Raise, or call the other a liar.', stakes('liar'))
-          + row('Twenty-One', 'Draw cards toward 21 without going over. Beat the dealer. A two-card 21 pays half again.', stakes('21'))
-          + row('Crown and Anchor', "The sailor's game. Back one of six signs. Three dice roll: each one showing your sign pays your stake.", stakes('ca'))
-          + row('Arm wrestle', 'The big fellow by the fire takes all comers. Three bouts: pick when to heave and when to hold.', stakes('arm'));
+        if (!g) { const R = { liar: row("Liar's Dice", 'Five dice each, hidden under a cup. Bid how many of a face are on the table in all. Raise, or call the other a liar.', stakes('liar')), 21: row('Twenty-One', 'Draw cards toward 21 without going over. Beat the dealer. A two-card 21 pays half again.', stakes('21')), ca: row('Crown and Anchor', "The sailor's game. Back one of six signs. Three dice roll: each one showing your sign pays your stake.", stakes('ca')), arm: row('Arm wrestle', 'The big fellow by the fire takes all comers. Three bouts: pick when to heave and when to hold.', stakes('arm')) };
+          return '<p>A candle, a table, and people who would love your money.</p>' + (ui.gOnly ? R[ui.gOnly] : Object.values(R).join('')); }
         const end = g.over ? `<p><b>${esc(g.over)}</b></p><p>${btn('Play again', 'play', `${g.kind}:${g.bet}`, 'go', s.gold < g.bet)} ${btn('Leave the table', 'gquit')}</p>` : '';
         if (g.kind === 'liar') {
           const valid = !g.bid || g.pc > g.bid.c || (g.pc === g.bid.c && g.pf > g.bid.f);
@@ -271,7 +279,7 @@ export function createUI(game) {
           tile('Friends', 'friends', 'Comes with online play'), tile('Help', 'talk', 'How to play'), tile('Settings', 'gear', 'Sound, graphics, backup'),
         ].join('')}</div>`;
       },
-      Quests() { const s = S(), o = game.quests.objective(); return `<h3>Story: ${esc(o.title)}</h3><p>${esc(o.text)}</p><p class="note">Next: ${esc(o.short)}</p><h3>Jobs (${s.jobs.length} of 3)</h3>${s.jobs.length ? s.jobs.map((j) => row(esc(j.title), esc(game.quests.shortText(j.obj) + game.quests.progress(j.obj, j.n)), `<span class="cost">${rewardText(j.reward)}</span>${btn('Drop', 'abandon', j.id, 'bad')}`)).join('') : '<p class="note">None taken. Tavern keepers in every port post work on their boards.</p>'}<p style="margin-top:12px">${btn('Open the chart', 'map', '', 'go')}</p>`; },
+      Quests() { const s = S(), o = game.quests.objective(); return `<h3>Story: ${esc(o.title)}</h3><p>${esc(o.text)}</p><p class="note">Next: ${esc(o.short)}</p>${game.quests.folkActive().length ? `<h3>Favours</h3>${game.quests.folkActive().map((f) => row(esc(`${f.name}, ${f.port}`), esc(f.text), '')).join('')}` : ''}<h3>Jobs (${s.jobs.length} of 3)</h3>${s.jobs.length ? s.jobs.map((j) => row(esc(j.title), esc(game.quests.shortText(j.obj) + game.quests.progress(j.obj, j.n)), `<span class="cost">${rewardText(j.reward)}</span>${btn('Drop', 'abandon', j.id, 'bad')}`)).join('') : '<p class="note">None taken. Tavern keepers in every port post work on their boards.</p>'}<p style="margin-top:12px">${btn('Open the chart', 'map', '', 'go')}</p>`; },
       Captain() {
         const s = S(), ps = playerStats(s), l = s.look, hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
         const sw = (key, opts) => `<div class="swatches">${Object.entries(opts).map(([k, c]) => `<button type="button" data-do="look" data-arg="${key}:${k}" class="${String(l[key]) === k ? 'on' : ''}" style="background:${hex(c)}" aria-label="${key} ${k}"></button>`).join('')}</div>`;
@@ -412,6 +420,8 @@ export function createUI(game) {
   const ACTIONS = {
     accept(i, p) { const err = game.quests.accept(p.isl.id, +i); if (err) ui.toast(err, 'warn'); else audio.good(); },
     abandon(id) { game.quests.abandon(id); },
+    folkyes(id) { game.quests.folkAccept(id); audio.good(); ui.toast('Favour taken on. See Menu, Quests.', 'gold'); },
+    folkclaim(id) { game.quests.folkClaim(id); },
     rum() { if (pay(S(), { gold: 30 })) { S().rum++; audio.coin(); } },
     hire(i) { const s = S(), o = s.hire.list[+i]; if (!o || s.crew.length >= shipStats(s).berths || !pay(s, { gold: hireCost(o) })) return; s.hire.list.splice(+i, 1); o.ashore = (HANDS[o.role].land || o.role === 'deckhand') && s.crew.filter((h) => h.ashore).length < 3; s.crew.push(o); game.sea.refreshStats(); audio.good(); ui.toast(`${o.name} signs your articles.`, 'gold'); },
     dismiss(id) { const s = S(), k = s.crew.findIndex((h) => h.id === id); if (k >= 0) { const h = s.crew.splice(k, 1)[0]; game.sea.refreshStats(); audio.ui(); ui.toast(`${h.name} is paid off.`, 'dim'); } },
@@ -505,8 +515,10 @@ export function createUI(game) {
     ui.dirty = true;
   }
   ui.open = (kind, title, sub, extra = {}) => { ui.panel = Object.assign({ kind, title, sub, tab: VIEWS[kind].tabs[0] || 'main' }, extra); el.panel.hidden = false; game.paused = true; for (const k in input.pressed) input.pressed[k] = false; input.move.x = input.move.y = 0; audio.ui(); render(); sheet.body.scrollTop = 0; };
-  ui.close = () => { if (!ui.panel) return; ui.panel = null; el.panel.hidden = true; game.paused = false; for (const k in input.pressed) input.pressed[k] = false; writeSave(S()); };
-  ui.openTown = (isl, npc) => { game.emit('talk', { npc: npc.id }); ui.open(npc.kind, `${npc.name}`, `${npc.role}, ${isl.name}`, { isl }); };
+  ui.close = () => { ui.gOnly = null; if (!ui.panel) return; ui.panel = null; el.panel.hidden = true; game.paused = false; for (const k in input.pressed) input.pressed[k] = false; writeSave(S()); };
+  ui.openTown = (isl, npc) => { game.emit('talk', { npc: npc.id }); ui.open(npc.kind, `${npc.name}`, `${npc.role}, ${isl.name}`, { isl, npc }); };
+  ui.openTavern = (isl, npc, tab, only) => { ui.open('tavern', npc.name, `${npc.role}, ${isl.name}`, { isl, npc }); ui.gOnly = only || null; ui.panel.tab = tab; render(); };
+  ui.hireOffers = (port) => hireOffers(port);
   ui.openBuild = (id) => ui.open('build', BUILDINGS[id].name, "Rogue's Rest", { id });
   ui.openMenu = (tab) => { ui.open('menu', 'Menu', ''); if (tab) { ui.panel.tab = tab; render(); } };
   ui.openWelcome = (pend) => ui.open('welcome', 'Welcome back, Captain', '', { pend });

@@ -195,9 +195,9 @@ export class Ship {
     } else this.speed = 0;
     const hb = waveHeight(this.x + this.fx * len * 0.4, this.z + this.fz * len * 0.4, time), hs = waveHeight(this.x - this.fx * len * 0.4, this.z - this.fz * len * 0.4, time);
     const hp = waveHeight(this.x + this.fz * beam * 0.5, this.z - this.fx * beam * 0.5, time), hq = waveHeight(this.x - this.fz * beam * 0.5, this.z + this.fx * beam * 0.5, time);
-    const k = this.frozen ? 0.25 : 0.6;
+    const k = this.frozen ? 0.3 : 0.9;
     this.pitch = damp(this.pitch, -Math.atan2(hb - hs, len * 0.8) * k, 3, dt); this.roll = damp(this.roll, Math.atan2(hp - hq, beam) * k * 0.7 + this.lean, 3, dt);
-    this.y = (hb + hs + hp + hq) * 0.25 * (this.frozen ? 0.25 : 0.55);
+    this.y = this.frozen ? (hb + hs + hp + hq) * 0.25 * 0.4 + 0.15 : (hb + hs + hp + hq) * 0.25 * 0.7 + Math.max(hb, hs, hp, hq) * 0.3 + 0.3; // sit on the swell, never under it
     g.position.set(this.x, this.y, this.z); g.rotation.set(this.pitch, this.heading, this.roll);
     this.sailVis = damp(this.sailVis, this.sail, 2.5, dt);
     const sv = 0.16 + 0.84 * this.sailVis;

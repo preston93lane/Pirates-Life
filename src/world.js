@@ -1,5 +1,6 @@
 // The static world: sky, ocean, island terrain, towns, fort, ruins, hideout. Also height and collision queries.
 import * as THREE from 'three';
+import { FOLK } from './data.js';
 import { ISLANDS, WORLD_R, BUILDINGS } from './data.js';
 import { fbm, noise, smooth, lerp, clamp, rng, WAVES, TAU, SEA } from './util.js';
 import { Mesher, Kit, MAT, box, cyl, cone, ball, groundMat, setGlow } from './geo.js';
@@ -16,6 +17,7 @@ export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, -0.72).normalize();
 
 const N = 100; // terrain grid resolution per island
 export const platforms = []; // walkable raised rectangles: piers, ship decks, the cave floor
+export const TAV = { x: 4200, z: 400, ang: 0, hl: 10, hw: 8, top: 3 }; // one shared tavern room
 export const CAVE = { x: 4200, z: 0, ang: 0, hl: 17, hw: 11, top: 3 }; // one shared cave room, far outside the chart
 const MOUNT = { bones: 1.5, tooth: 1.6, regal: 0.8, saltmere: 0.6, blood: 0.5, rest: 0.45, crab: 0.15, gull: 0.3, shoals: 0.4 };
 
@@ -36,7 +38,7 @@ function heightRaw(isl, x, z) {
     h = -1.5 + smooth(0, 0.16, t) * 3.4 + smooth(0.14, 0.8, t) * isl.h * (0.18 + 1.5 * n * n) + smooth(0.25, 0.85, t) * isl.h * (MOUNT[isl.id] || 0.3) * Math.pow(ridge, 2.2) * 1.6;
   }
   for (const f of isl.flats) {
-    const w = smooth(f.r * 1.4, f.r * 0.85, Math.hypot(x - f.x, z - f.z));
+    const w = smooth(f.r * (f.soft || 1.4), f.r * 0.85, Math.hypot(x - f.x, z - f.z));
     if (w > 0) h = lerp(h, f.y, w);
   }
   return h;
@@ -88,7 +90,7 @@ function plan(isl) {
   isl.flats = fr ? [{ x: isl.site.x, z: isl.site.z, r: fr, y: fy }] : [];
   if (isl.kind === 'town') { // a bandit camp on the far side
     isl.camp = { x: isl.x - isl.dir[0] * isl.r * 0.42, z: isl.z - isl.dir[1] * isl.r * 0.42 };
-    if (isl.id === 'regal') { isl.navy = { x: isl.camp.x, z: isl.camp.z, S: 38, rot: isl.land, name: 'Fort Regal' }; isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 33, y: 5 }); }
+    if (isl.id === 'regal') { isl.navy = { x: isl.camp.x, z: isl.camp.z, S: 38, rot: isl.land, name: 'Fort Regal' }; let top = 8; for (let i = 0; i < 16; i++) { const an = (i / 16) * TAU; for (const rr of [18, 34, 48]) top = Math.max(top, heightRaw(isl, isl.camp.x + Math.sin(an) * rr, isl.camp.z + Math.cos(an) * rr)); } isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 33, soft: 2.4, y: Math.min(44, top + 2) }); }
     else isl.flats.push({ x: isl.camp.x, z: isl.camp.z, r: 14, y: 4 });
   }
   if (isl.id === 'gull') { isl.navy = { x: isl.x, z: isl.z, S: 20, rot: isl.land, name: 'Gull Battery' }; isl.flats = [{ x: isl.x, z: isl.z, r: 18, y: 4.5 }]; }
@@ -295,7 +297,7 @@ function pier(m, isl) {
 const signTex = new Map();
 function signSprite(text) {
   let t = signTex.get(text);
-  if (!t) { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d'); c.fillStyle = '#2a1d14'; c.fillRect(0, 0, 256, 64); c.strokeStyle = '#b58a2e'; c.lineWidth = 4; c.strokeRect(4, 4, 248, 56); c.fillStyle = '#e9c46a'; c.font = '700 30px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, 128, 34); t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; signTex.set(text, t); }
+  if (!t) { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d'); c.fillStyle = '#2a1d14'; c.fillRect(0, 0, 256, 64); c.strokeStyle = '#b58a2e'; c.lineWidth = 4; c.strokeRect(4, 4, 248, 56); c.fillStyle = '#e9c46a'; c.font = '700 30px Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, 128, 34); if (text === '!') { c.clearRect(0, 0, 256, 64); c.fillStyle = '#e9c46a'; c.font = '700 60px Georgia, serif'; c.fillText('!', 128, 36); } t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; signTex.set(text, t); }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t })); s.scale.set(4.4, 1.1, 1); return s;
 }
 const frameAt = (p, rot) => { const fx = Math.sin(rot), fz = Math.cos(rot), y = heightAt(p.x, p.z); return (lx, ly, lz) => [p.x + fx * lz + fz * lx, y + ly, p.z + fz * lz - fx * lx]; };
@@ -311,8 +313,9 @@ function town(m, isl, group) {
   const names = { saltmere: { tavern: 'Mara', shipwright: 'Old Tobias', smith: 'Brenna', market: 'Quill' }, regal: { tavern: 'Mr. Finch', shipwright: 'Master Hale', market: 'Widow Ames' }, shoals: { tavern: 'One-Eye Sal', smith: 'The Dutchman', market: 'Nan' } }[id];
   const ROLE = { tavern: ['Tavern keeper', 'keeper', 'TAVERN'], shipwright: ['Shipwright', 'wright', 'SHIPWRIGHT'], smith: ['Blacksmith', 'smith', 'BLACKSMITH'], market: ['Merchant', 'merchant', 'MARKET'] };
   const npc = (kind, b, signY = 5.4) => {
-    const [role, look, label] = ROLE[kind], fig = staticFigure(look); fig.position.set(b.front.x, heightAt(b.front.x, b.front.z), b.front.z); fig.rotation.y = b.rot; group.add(fig);
-    isl.npcs.push({ id: `${id}:${kind}`, kind, name: names[kind], role, x: b.front.x, z: b.front.z }); isl.colliders.push({ x: b.front.x, z: b.front.z, r: 0.5 });
+    const [role, look, label] = ROLE[kind], door = kind === 'tavern';
+    if (!door) { const fig = staticFigure(look); fig.position.set(b.front.x, heightAt(b.front.x, b.front.z), b.front.z); fig.rotation.y = b.rot; group.add(fig); isl.colliders.push({ x: b.front.x, z: b.front.z, r: 0.5 }); }
+    isl.npcs.push({ id: `${id}:${kind}`, kind, name: names[kind], role, x: b.front.x, z: b.front.z, door });
     const sg = signSprite(label), sp = b.sign || b.front; sg.position.set(sp.x, heightAt(sp.x, sp.z) + signY, sp.z); group.add(sg);
   };
   // ---- the four trades, each with a shape of its own ----
@@ -397,6 +400,10 @@ function town(m, isl, group) {
     for (let i = 0; i < 3; i++) { const p = L(30 + i * 3.2, -20), y = heightAt(p.x, p.z); m.add(cyl(0.07, 0.07, 2.6, 4), PAL.timber, [p.x, y + 1.3, p.z]); if (i) m.add(box(3.2, 1.4, 0.04), 0x6a6a58, [p.x - isl.dir[0] * 1.6, y + 1.8, p.z - isl.dir[1] * 1.6], [0, aD + Math.PI / 2, 0], 1, 0.12, 'plain'); } // drying nets
     [[14, 2, 1], [15, 3.2, 0.8], [-2, -20, 1], [26, 18, 1]].forEach(([u, v, s]) => { const p = L(u, v); barrel(m, p.x, p.z, s); }); [[10, -4, 1], [-18, 8, 0.9], [27, 16, 1.1]].forEach(([u, v, s], i) => { const p = L(u, v); crate(m, p.x, p.z, s, i); });
   }
+  // townsfolk with something to ask of a captain
+  for (const f of FOLK) if (f.isl === id) { const p = L(f.at[0], f.at[1]), fig = staticFigure(f.look); fig.position.set(p.x, heightAt(p.x, p.z), p.z); fig.rotation.y = toSite(p) + 0.6; group.add(fig);
+    isl.npcs.push({ id: `${id}:folk:${f.id}`, kind: 'folk', folk: f.id, name: f.name, role: f.role, x: p.x, z: p.z }); isl.colliders.push({ x: p.x, z: p.z, r: 0.5 });
+    const mk = signSprite('!'); mk.scale.set(0.9, 0.9, 1); mk.position.set(p.x, heightAt(p.x, p.z) + 2.7, p.z); group.add(mk); }
   if (isl.navy) return;
   // bandit camp
   const k = isl.camp, ky = heightAt(k.x, k.z);
@@ -638,6 +645,26 @@ export function createWorld(scene) {
     const dome = new THREE.Mesh(new THREE.SphereGeometry(30, 12, 8), new THREE.MeshBasicMaterial({ color: 0x2a221a, side: THREE.BackSide, fog: false })); dome.scale.y = 0.55; dome.position.set(c.x, c.top, c.z); scene.add(dome);
   }
 
+  // ----- the tavern room (shared by every tavern door) -----
+  platforms.push(TAV);
+  { const k = new Kit(KINDS), c = TAV, W = c.hw, H = c.hl, at = (x, y, z) => [c.x + x, c.top + y, c.z + z];
+    k.add(box(W * 2 + 2, 1, H * 2 + 2), PAL.plank, at(0, -0.5, 0), [0, 0, 0], 1, 0.03);
+    for (const sx of [-1, 1]) k.add(box(0.5, 3.6, H * 2 + 1), PAL.timber, at(sx * (W + 0.25), 1.8, 0)); k.add(box(W * 2 + 1, 3.6, 0.5), PAL.timber, at(0, 1.8, H + 0.25));
+    for (const sx of [-1, 1]) k.add(box(W - 1.2, 3.6, 0.5), PAL.timber, at(sx * (W / 2 + 0.8), 1.8, -H - 0.25)); k.add(box(2.6, 0.5, 0.6), PAL.darkTimber, at(0, 3.3, -H - 0.25));
+    for (let i = -2; i <= 2; i++) k.add(box(W * 2 + 0.6, 0.3, 0.3), PAL.darkTimber, at(0, 3.6, i * 4)); // beams
+    k.add(box(10, 1.1, 0.9), PAL.darkTimber, at(0, 0.55, 6.4)); k.add(box(10.4, 0.12, 1.2), PAL.plank, at(0, 1.16, 6.4)); // the bar
+    k.add(box(9, 0.12, 0.5), PAL.darkTimber, at(0, 1.7, H - 0.3)); k.add(box(9, 0.12, 0.5), PAL.darkTimber, at(0, 2.5, H - 0.3));
+    for (let i = 0; i < 14; i++) k.add(cyl(0.09, 0.11, 0.42, 6), [0x3f7a5c, 0x7a4a2a, 0x8a2a22, 0xc9a94a][i % 4], at(-4.2 + (i % 7) * 1.4, i < 7 ? 1.97 : 2.77, H - 0.3), [0, 0, 0], 1, 0, 'plain');
+    for (const x of [-3.6, 3.6]) k.add(cyl(0.5, 0.5, 1.1, 8), PAL.timber, at(x, 1.75, 6.4), [Math.PI / 2, 0, 0]); // kegs on the bar
+    c.tables = [[-4.4, -3.2], [4.4, -3.2], [0, 1.6]];
+    for (const [x, z] of c.tables) { k.add(cyl(1.2, 1.2, 0.1, 10), PAL.plank, at(x, 0.95, z)); k.add(cyl(0.16, 0.3, 0.9, 6), PAL.darkTimber, at(x, 0.45, z)); for (let i = 0; i < 4; i++) k.add(cyl(0.26, 0.26, 0.5, 6), PAL.timber, at(x + Math.sin(i * 1.57 + 0.8) * 1.75, 0.25, z + Math.cos(i * 1.57 + 0.8) * 1.75)); k.add(cyl(0.07, 0.09, 0.22, 5), 0xc79a3a, at(x + 0.4, 1.1, z + 0.2), [0, 0, 0], 1, 0, 'plain'); k.add(box(0.16, 0.3, 0.16), PAL.lit, at(x - 0.2, 1.15, z - 0.3), [0, 0, 0], 1, 0); }
+    k.add(box(0.8, 2.6, 3.2), PAL.stone, at(-W + 0.3, 1.3, 5.6)); k.add(box(0.5, 1.2, 1.8), 0x0d0b0a, at(-W + 0.75, 0.6, 5.6), [0, 0, 0], 1, 0, 'plain'); k.add(cone(0.5, 0.9, 5), 0xff9a3c, at(-W + 0.9, 0.5, 5.6), [0, 0, 0], 1, 0, 'plain'); // hearth
+    for (const [x, z] of [[-W + 0.3, -4], [W - 0.3, -4], [W - 0.3, 3], [-W + 0.3, 0.5], [-3, H - 0.1], [3, H - 0.1]]) k.add(box(0.36, 0.46, 0.36), PAL.lit, at(x, 2.5, z), [0, 0, 0], 1, 0);
+    for (const [x, z, s] of [[W - 1, H - 1.2, 1.2], [W - 2.2, H - 1, 1], [-W + 1, -H + 1.2, 1.1]]) k.add(cyl(0.4 * s, 0.4 * s, 0.95 * s, 7), PAL.timber, at(x, 0.48 * s, z));
+    scene.add(k.mesh());
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(34, 12, 8), new THREE.MeshBasicMaterial({ color: 0x1c130c, side: THREE.BackSide, fog: false })); dome.scale.y = 0.6; dome.position.set(c.x, c.top, c.z); scene.add(dome);
+  }
+
   // ----- time of day and weather -----
   const KEY = {
     night: { fog: C(0x31425c), zen: C(0x101a30), hor: C(0x3d5278), sun: C(0xb4c6ee), deep: C(0x0c2436), hemi: 1.85, sunI: 1.45, sky: C(0x9db0dc), n: 1 },
@@ -655,7 +682,7 @@ export function createWorld(scene) {
     for (const n of ['fog', 'zen', 'hor', 'sun', 'deep']) cur[n].copy(A[n]).lerp(B[n], f).lerp(foul[n], k * (n === 'sun' ? 0.8 : 1));
     let hemiI = lerp(A.hemi, B.hemi, f) * (1 - k * 0.45), sunI = lerp(A.sunI, B.sunI, f) * (1 - k * 0.8), dens = 0.00135 + k * 0.0021;
     world.night = lerp(A.n, B.n, f);
-    if (world.cave) { cur.fog.set(0x2a221a); hemiI = 2.5; sunI = 0.9; dens = 0.004; }
+    if (world.cave) { cur.fog.set(0x2a221a); hemiI = 2.5; sunI = 0.9; dens = 0.004; if (world.tavern) { cur.fog.set(0x1c130c); hemiI = 3.2; sunI = 1.2; dens = 0.002; } }
     shared.uFog.value.copy(cur.fog); shared.uZenith.value.copy(cur.zen); shared.uHorizon.value.copy(cur.hor); shared.uSunCol.value.copy(cur.sun); o.uDeep.value.copy(cur.deep);
     shared.uNight.value = world.night * (1 - k); shared.uLight.value = clamp(hemiI / 2.1, 0.3, 1);
     scene.fog.color.copy(cur.fog); scene.background.copy(cur.fog); scene.fog.density = dens; o.uFogD.value = dens;

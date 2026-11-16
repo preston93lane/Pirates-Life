@@ -4,7 +4,7 @@ import { buildCharacter, buildPet, staticFigure } from './character.js';
 import { FOES, ISLANDS, BUILDINGS, SWORDS, PETS, CAVE_FOES, HANDS, GRADES } from './data.js';
 import { playerStats, shipStats, collect, deathTax, grant, isWanted, addMorale, crewBonus, feat, addRep } from './state.js';
 import { clamp, angleDiff, turnToward, rand, pick, dist2, damp, TAU } from './util.js';
-import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE } from './world.js';
+import { groundAt, heightAt, platforms, chestMesh, refreshBase, CAVE, TAV } from './world.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
 
@@ -41,7 +41,7 @@ export function createLand(game) {
   // ----- the captain's torch: lit in caves and after dark -----
   const torchLight = new THREE.PointLight(0xffb469, 0, 46, 1.25); scene.add(torchLight);
   function updateTorch(dt) {
-    const p = land.player, lit = !!land.kind && p && p.alive && (land.cave || game.world.night > 0.3), want = !lit ? 0 : land.cave ? 60 : 34 * Math.min(1, game.world.night * 1.6);
+    const p = land.player, lit = !!land.kind && p && p.alive && ((land.cave && !land.cave.tavern) || (!land.cave && game.world.night > 0.3)), want = !lit ? 0 : land.cave ? 60 : 34 * Math.min(1, game.world.night * 1.6);
     torchLight.intensity = damp(torchLight.intensity, want, 6, dt);
     if (!p) return;
     p.ch.torch = !!lit && land.gun == null;
@@ -121,7 +121,8 @@ export function createLand(game) {
     for (const c of land.chests) scene.remove(c.mesh);
     for (const m of land.mounds) scene.remove(m);
     for (const q of land.pois) if (q.mesh) scene.remove(q.mesh);
-    land.chests = []; land.mounds = []; land.pois = []; land.focus = null; land.tokens = 0;
+    for (const m of land.props || []) scene.remove(m);
+    land.chests = []; land.mounds = []; land.pois = []; land.props = []; land.tav = null; land.roomCols = null; land.alarmed = false; land.focus = null; land.tokens = 0;
   }
   function spawnPlayer(x, z, face) {
     const p = ensurePlayer(), st = playerStats(game.save);
@@ -129,7 +130,7 @@ export function createLand(game) {
     p.ch.anim.state = 'idle'; p.ch.anim.t = 0; scene.add(p.ch.root); place(p);
   }
   land.enter = (isl, at) => {
-    clear(); land.isl = isl; land.kind = 'land'; land.cave = null; game.world.cave = false;
+    clear(); land.isl = isl; land.kind = 'land'; land.cave = null; game.world.cave = false; game.world.tavern = false;
     const s = game.save, now = Date.now(), lvl = 1 + 0.07 * (s.level - 1);
     if (at) spawnPlayer(at.x, at.z + 3.5, 0); else spawnPlayer(isl.landing.x, isl.landing.z, isl.land + Math.PI);
     // chance encounters: nothing shows on the compass until you are nearly on top of it
@@ -151,7 +152,7 @@ export function createLand(game) {
       if (sp.foe === 'crabking' && s.bosses.crabking && now - s.bosses.crabking < 20 * 60000) return;
       if (isl.kind === 'fort' && !raidReady) return;
       if (sp.navy && navyCold) return;
-      const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl * (sp.navy ? 1.45 : 1)); a.spawnI = i;
+      const a = makeActor(sp.foe, sp.x, sp.z, 1, lvl * (sp.navy ? 1.45 : 1)); a.spawnI = i; a.grp = sp.navy ? 'navy' : isl.kind === 'fort' ? 'fort' : null;
       if (sp.foe === 'skeleton') { a.state = 'buried'; a.ch.root.visible = false; }
     });
     if (isl.id === 'regal' && isWanted(s)) { for (let i = 0; i < 4; i++) { const a = makeActor('soldier', isl.site.x + isl.dir[0] * 18 + rand(-6, 6), isl.site.z + isl.dir[1] * 18 + rand(-6, 6), 1, lvl); a.state = 'chase'; } game.toast('The garrison knows your face!', 'warn'); }
@@ -178,6 +179,24 @@ export function createLand(game) {
     petAshore(); landingParty(); game.toast(fresh ? 'Something moves in the dark.' : 'The cave is quiet. You cleared it not long ago.', fresh ? 'warn' : 'dim');
   });
   land.exitCave = () => game.fade(() => { const isl = land.isl; land.enter(isl, isl.caveAt); game.cam.yaw = 0; });
+  // ----- inside the tavern: the keeper, hands looking for a ship, and the gaming tables -----
+  land.enterTavern = () => game.fade(() => {
+    const isl = land.isl, c = TAV, npc = isl.npcs.find((n) => n.kind === 'tavern');
+    clear(); land.isl = isl; land.cave = { isl, tavern: true }; game.world.cave = true; game.world.tavern = true;
+    spawnPlayer(c.x, c.z - c.hl + 2, 0); game.cam.yaw = 0; game.cam.pitch = 0.75;
+    land.tav = []; land.roomCols = [];
+    const fig = (look, x, z, rot, r = 0.5) => { const m = staticFigure(look); m.position.set(c.x + x, c.top, c.z + z); m.rotation.y = rot; scene.add(m); land.props.push(m); land.roomCols.push({ x: c.x + x, z: c.z + z, r }); };
+    const spot = (x, z, r, label, sub, icon, run) => land.tav.push({ x: c.x + x, z: c.z + z, r, label, sub, icon, run });
+    for (let x = -4.6; x <= 4.6; x += 1.15) land.roomCols.push({ x: c.x + x, z: c.z + 6.4, r: 0.7 });
+    land.roomCols.push({ x: c.x - c.hw + 0.6, z: c.z + 5.6, r: 1.4 });
+    fig('keeper', 0, 7.8, Math.PI); spot(0, 5.2, 2.6, 'Talk', `${npc.name}, ${npc.role}`, 'talk', () => game.ui.openTown(isl, npc));
+    const GAMES = [['liar', "Liar's Dice", 'merchant', 'crew'], ['21', 'Twenty-One', 'wright', 'crew'], ['ca', 'Crown and Anchor', 'crew', 'brigand']];
+    c.tables.forEach(([x, z], i) => { const [key, name, a, b] = GAMES[i]; land.roomCols.push({ x: c.x + x, z: c.z + z, r: 1.35 }); fig(a, x - 1.75, z, Math.PI / 2, 0.4); fig(b, x + 1.75, z, -Math.PI / 2, 0.4); spot(x, z - 1.2, 2.3, `Play ${name}`, 'Pull up a stool', 'chest', () => game.ui.openTavern(isl, npc, 'Games', key)); });
+    fig('brute', -c.hw + 2.2, 3.4, Math.PI / 2, 0.6); spot(-c.hw + 2.2, 3.4, 2.1, 'Arm wrestle', 'The big fellow by the fire', 'sword', () => game.ui.openTavern(isl, npc, 'Games', 'arm'));
+    game.ui.hireOffers(isl.id).slice(0, 5).forEach((o, i) => { const x = c.hw - 1.2, z = -6.5 + i * 2.5; fig(FOES[HANDS[o.role].foe].look, x, z, -Math.PI / 2, 0.45); spot(x - 0.6, z, 1.5, 'Talk', `${o.name}, ${GRADES[o.g].name.toLowerCase()} ${HANDS[o.role].name.toLowerCase()} looking for a ship`, 'person', () => game.ui.openTavern(isl, npc, 'Hands')); });
+    petAshore();
+  });
+  land.exitTavern = () => game.fade(() => { const isl = land.isl, n = isl.npcs.find((x) => x.kind === 'tavern'); land.enter(isl, { x: n.x, z: n.z - 3.5 }); });
   // ----- powder flasks -----
   const bombGeo = new THREE.IcosahedronGeometry(0.16, 0), bombMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a, flatShading: true });
   function throwBomb(p) {
@@ -232,7 +251,7 @@ export function createLand(game) {
     if (land.deck) { const i = platforms.indexOf(land.deck); if (i >= 0) platforms.splice(i, 1); land.deck = null; const sh = game.sea.player; if (sh.group.userData.helm) sh.group.userData.helm.visible = true; sh.fadeSails(false); }
     if (land.player) scene.remove(land.player.ch.root);
     if (land.boarding) { for (const p of land.boarding.plats) { const i = platforms.indexOf(p); if (i >= 0) platforms.splice(i, 1); } game.sea.player.frozen = false; land.boarding.enemy.frozen = false; game.sea.player.fadeSails(false); land.boarding.enemy.fadeSails(false); land.boarding = null; }
-    aimLine.visible = false; land.kind = null; land.isl = null; land.gun = null; land.torchOff(); land.dockPet();
+    aimLine.visible = false; game.world.tavern = false; land.kind = null; land.isl = null; land.gun = null; land.torchOff(); land.dockPet();
   };
 
   // ---------- movement ----------
@@ -240,6 +259,7 @@ export function createLand(game) {
     const ok = (x, z) => groundAt(x, z) > -0.6 && (!(land.boarding || land.kind === 'deck' || land.cave) || groundAt(x, z) > 0.5);
     let nx = a.x + dx, nz = a.z + dz;
     if (!ok(nx, nz)) { if (ok(nx, a.z)) nz = a.z; else if (ok(a.x, nz)) nx = a.x; else return; }
+    if (land.cave && land.roomCols) for (const c of land.roomCols) { const d = dist2(nx, nz, c.x, c.z), m = c.r + a.radius; if (d < m && d > 0.001) { nx = c.x + ((nx - c.x) / d) * m; nz = c.z + ((nz - c.z) / d) * m; } }
     if (land.isl && !land.cave) for (const c of land.isl.colliders) { const d = dist2(nx, nz, c.x, c.z), m = c.r + a.radius; if (d < m && d > 0.001) { nx = c.x + ((nx - c.x) / d) * m; nz = c.z + ((nz - c.z) / d) * m; } }
     if (!ok(nx, nz)) return;
     a.x = nx; a.z = nz;
@@ -263,7 +283,13 @@ export function createLand(game) {
     if (a.hp <= 0) return kill(a, from);
     if (!a.def.heavy && !a.def.boss && !a.def.mini && a.state !== 'stagger' && (a.state !== 'wind' || crit)) { release(a); a.state = 'stagger'; a.t = crit ? 0.7 : 0.28; a.ch.anim.state = 'stagger'; }
   }
-  function wake(a) { if (a.state === 'buried') { a.ch.root.visible = true; a.state = 'rise'; a.t = 0; fx.dust(a.x, a.y + 0.2, a.z, 10); } else if (a.state === 'idle') a.state = 'chase'; }
+  // one shout and the whole garrison comes running
+  function alarm(a) {
+    if (!a.grp || land.alarmed) return; land.alarmed = true; audio.bad(); game.shake(0.3);
+    game.toast(a.grp === 'navy' ? 'The alarm bell! The whole garrison is coming!' : 'They raise the alarm! The whole fort is coming!', 'warn');
+    for (const b of land.actors) if (b.alive && b.grp === a.grp && b.state === 'idle') { b.state = 'chase'; b.cd = rand(0.2, 1.2); }
+  }
+  function wake(a) { alarm(a); if (a.state === 'buried') { a.ch.root.visible = true; a.state = 'rise'; a.t = 0; fx.dust(a.x, a.y + 0.2, a.z, 10); } else if (a.state === 'idle') a.state = 'chase'; }
   function release(a) { if (a.token) { a.token = false; land.tokens = Math.max(0, land.tokens - 1); } a.mark.visible = false; if (a.line) a.line.visible = false; }
   function kill(a, from) {
     a.alive = false; a.hp = 0; release(a); a.state = 'dead'; a.t = 0; a.ch.anim.state = 'dead'; a.ch.anim.t = 0; a.bar.visible = a.bg.visible = false;
@@ -329,7 +355,7 @@ export function createLand(game) {
       else if (input.take('primary')) swing(p, 0);
       else if (input.take('shoot')) {
         if (p.gunT > 0) game.toast('Still reloading', 'dim');
-        else { const t = findFocus(30, Math.sin(p.face), Math.cos(p.face)); p.state = 'aimgun'; p.t = 0; if (t) p.face = Math.atan2(t.x - p.x, t.z - p.z); game.tip2('aim', 'Tap SHOOT for a quick shot. Hold it to aim: drag or use the stick to swing the pistol, then let go to fire.', 9); }
+        else { const t = findFocus(30, Math.sin(p.face), Math.cos(p.face)); p.state = 'aimgun'; p.t = 0; void t; game.tip2('aim2', 'The pistol fires where you point it. Hold SHOOT, swing the line onto a foe with the stick or by dragging, then let go.', 9); }
       } else if (input.take('rum')) {
         if (s.rum > 0 && p.hp < p.maxHp) { s.rum--; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (0.55 + Math.min(0.4, crewBonus(s).heal * 0.4))); audio.good(); game.toast('You drink the rum. Wounds fade.', 'dim'); fx.sparks(p.x, p.y + 1.6, p.z, 10, 0x9fe0a8); }
         else game.toast(s.rum > 0 ? 'You are not hurt' : 'No rum left', 'dim');
@@ -378,7 +404,7 @@ export function createLand(game) {
       p.face -= input.look.x * 0.006 + input.move.x * 1.7 * dt; input.look.x = 0; game.cam.lookT = 1;
       game.cam.yaw += angleDiff(game.cam.yaw, p.face) * Math.min(1, 7 * dt);
       const dx = Math.sin(p.face), dz = Math.cos(p.face); let hit = null, best = 32;
-      for (const a of land.actors) { if (!a.alive || a.team !== 1 || a.state === 'buried') continue; const rx = a.x - p.x, rz = a.z - p.z, along = rx * dx + rz * dz; if (along < 0.5 || along > best) continue; if (Math.abs(rx * dz - rz * dx) < a.radius + 0.55) { best = along; hit = a; } }
+      for (const a of land.actors) { if (!a.alive || a.team !== 1 || a.state === 'buried') continue; const rx = a.x - p.x, rz = a.z - p.z, along = rx * dx + rz * dz; if (along < 0.5 || along > best) continue; if (Math.abs(rx * dz - rz * dx) < a.radius + 0.22) { best = along; hit = a; } }
       aimLine.visible = true; aimLine.material.color.set(hit ? 0xffd28a : 0xcfc7b0); aimLine.scale.z = best; aimLine.rotation.y = p.face; aimLine.position.set(p.x + dx * (0.7 + best / 2), p.y + 1.45, p.z + dz * (0.7 + best / 2));
       if (!input.down.shoot && p.t > 0.1) { p.state = 'shoot'; p.t = 0.13; p.shotAt = hit; p.fired = false; }
     } else if (p.state === 'throw') { an.state = 'throw'; an.u = Math.min(1, p.t / 0.45); if (p.t > 0.45) p.state = 'free'; }
@@ -432,7 +458,7 @@ export function createLand(game) {
     const t = nearestEnemyOf(a);
     if (a.state === 'idle') {
       an.state = 'idle';
-      if (t && dist2(a.x, a.z, t.x, t.z) < (a.def.boss ? 26 : 17)) { a.state = 'chase'; if (a.def.boss) { audio.roar(); game.shake(0.8); } }
+      if (t && dist2(a.x, a.z, t.x, t.z) < (a.def.boss ? 26 : 17)) { a.state = 'chase'; alarm(a); if (a.def.boss) { audio.roar(); game.shake(0.8); } }
       settle(a, dt); return;
     }
     if (a.team === 0 && land.kind === 'land' && a.state !== 'stagger' && (!t || dist2(a.x, a.z, p.x, p.z) > 24)) { // stay with the captain
@@ -459,7 +485,8 @@ export function createLand(game) {
         a.line.visible = a.team === 1; a.line.position.set(from.x + Math.sin(a.face) * L / 2, from.y, from.z + Math.cos(a.face) * L / 2); a.line.rotation.y = a.face; a.line.scale.z = L; a.line.material.opacity = 0.35 + 0.5 * (a.t / a.def.tele);
         if (a.t >= a.def.tele) {
           release(a); a.state = 'chase'; a.cd = rand(2.4, 3.6); audio.shot(0.7); fx.smoke(from.x, from.y, from.z, [Math.sin(a.face) * 0.4, 0, Math.cos(a.face) * 0.4], 5);
-          const hit = dist2(t.x, t.z, a.aim.x, a.aim.z) < 1.5 && !(t.isPlayer && iframes(t));
+          const acc = clamp(0.3 + 0.065 * (game.save.level - 1) + (a.def.mini || a.key === 'rifleman' ? 0.2 : 0), 0.3, 0.92); // raw recruits miss; veterans rarely do
+          const hit = dist2(t.x, t.z, a.aim.x, a.aim.z) < 1.5 && !(t.isPlayer && iframes(t)) && (!t.isPlayer || Math.random() < acc);
           const end = hit ? chest(t) : { x: from.x + Math.sin(a.face) * L, y: from.y, z: from.z + Math.cos(a.face) * L }; fx.tracer(from, end);
           if (hit) { if (t.isPlayer) hurtPlayer(a.dmg * (t.state === 'block' ? 0.5 : 1), a, false); else if (t.team === 1) hurtFoe(t, a.dmg * rand(0.9, 1.1), a, false); else { t.hp -= a.dmg; t.bar.visible = t.bg.visible = true; t.bar.scale.x = Math.max(0.001, t.hp / t.maxHp); if (t.hp <= 0) kill(t, a); } }
           else if (t.isPlayer) game.ui.floatText(t.x, t.y + 2.2, t.z, 'Missed', '#cfe8d8');
@@ -509,6 +536,12 @@ export function createLand(game) {
       if (Math.abs(land.lz - (0.47 - 0.5) * sh.cls.len) < 2.2 && Math.abs(land.lx) < 2.2 && need > 4 && s.timber > 0) return { label: 'Repair hull', sub: `${s.timber} timber aboard`, icon: 'build', run: () => { const n = Math.min(5, s.timber, Math.ceil(need / 5)); s.timber -= n; sh.hp = Math.min(sh.maxHp, sh.hp + n * 5); audio.dig(); game.toast(`Patched the hull with ${n} timber.`, 'gold'); } };
       return { label: 'Take the helm', icon: 'anchor', run: () => game.takeHelm() };
     }
+    if (land.cave && land.cave.tavern) {
+      let best = null, bd = 1e9; for (const t of land.tav) { const d = dist2(p.x, p.z, t.x, t.z); if (d < t.r && d < bd) { bd = d; best = t; } }
+      if (best) return { label: best.label, sub: best.sub, icon: best.icon, run: best.run };
+      if (p.z < TAV.z - TAV.hl + 2.8) return { label: 'Leave the tavern', icon: 'anchor', run: () => land.exitTavern() };
+      return null;
+    }
     if (land.cave) {
       const dng = land.actors.some((a) => a.alive && a.team === 1);
       for (const ch of land.chests) if (!ch.open && dist2(p.x, p.z, ch.c.x, ch.c.z) < 2.8) return dng ? { label: 'Enemies near', icon: 'chest', run: () => game.toast('Deal with them first', 'dim') } : { label: 'Open the hoard', icon: 'chest', run: () => openChest(ch) };
@@ -522,7 +555,7 @@ export function createLand(game) {
       if (q.type === 'shrine') return { label: 'Touch the idol', sub: 'It hums faintly', icon: 'talk', run: () => { q.done = true; if (Math.random() < 0.65) { s.bless = Date.now() + 10 * 60000; audio.good(); fx.sparks(q.x, p.y + 2.6, q.z, 24, 0x9fe0d0); game.toast('The idol warms. Your blade bites 25% deeper for ten minutes.', 'gold'); } else { audio.bad(); game.toast('The ground splits. The dead take offence.', 'warn'); for (let i = 0; i < 3; i++) { const a = makeActor('skeleton', q.x + Math.sin(i * 2.1) * 4, q.z + Math.cos(i * 2.1) * 4, 1, 1 + 0.07 * (s.level - 1)); a.state = 'rise'; a.t = 0; } } } };
     }
     const danger = land.actors.some((a) => a.alive && a.team === 1 && a.state !== 'idle' && a.state !== 'buried' && dist2(a.x, a.z, p.x, p.z) < 14);
-    for (const n of isl.npcs) if (dist2(p.x, p.z, n.x, n.z) < 3.4) return { label: 'Talk', sub: `${n.name}, ${n.role}`, icon: 'talk', run: () => game.ui.openTown(isl, n) };
+    for (const n of isl.npcs) if (dist2(p.x, p.z, n.x, n.z) < 3.4) return n.door ? { label: 'Enter the tavern', sub: `${n.name} keeps it`, icon: 'board', run: () => land.enterTavern() } : { label: 'Talk', sub: `${n.name}, ${n.role}`, icon: 'talk', run: () => game.ui.openTown(isl, n) };
     for (const ch of land.chests) if (!ch.open && dist2(p.x, p.z, ch.c.x, ch.c.z) < 2.6) return danger ? { label: 'Enemies near', icon: 'chest', run: () => game.toast('Deal with them first', 'dim') } : { label: ch.c.vault ? 'Break vault' : 'Open chest', icon: 'chest', run: () => openChest(ch) };
     for (const m of s.maps) if (m.island === isl.id) {
       const d = isl.digs[m.spot];
